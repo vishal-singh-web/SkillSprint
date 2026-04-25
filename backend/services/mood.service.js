@@ -1,50 +1,85 @@
-const mockDb = require("../data/mockDb");
+const supabase = require("../config/supabase");
+const { generateJSONPrompt } = require("./gemini.service");
 
-const moodPlans = {
-  low: {
-    difficulty: "easy",
-    theme: "calm",
-    message: "Let's keep it light today. Small progress is still progress.",
-    adjustedDaily3: [
-      "Revise one previous DSA problem",
-      "Update one resume bullet",
-      "Apply to one role",
-    ],
-  },
-  neutral: {
-    difficulty: "medium",
-    theme: "focused",
-    message: "Steady mode is perfect. Complete your core three tasks today.",
-    adjustedDaily3: [
-      "Solve 2 DSA problems",
-      "Practice one interview answer",
-      "Apply to 3 internships",
-    ],
-  },
-  high: {
-    difficulty: "hard",
-    theme: "energetic",
-    message: "Great energy. Push a little more and build momentum today.",
-    adjustedDaily3: [
-      "Solve 3 DSA problems with notes",
-      "Build one small project feature",
-      "Do a 20-minute mock interview",
-    ],
-  },
+const getTodayISO = () => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date.toISOString();
 };
 
-const getMoodPlan = (mood) => {
-  const plan = moodPlans[mood];
+const getLastTwoDaysISO = () => {
+  const date = new Date();
+  date.setDate(date.getDate() - 2);
+  return date.toISOString();
+};
 
-  mockDb.moodHistory.push({
+const validateMoodResponse = (aiResult) => {
+  const isValid =
+    aiResult &&
+    typeof aiResult.mood === "string" &&
+    typeof aiResult.difficulty === "string" &&
+    typeof aiResult.theme === "string" &&
+    typeof aiResult.message === "string" &&
+    Array.isArray(aiResult.adjustedDaily3);
+
+  if (!isValid) {
+    const error = new Error("Gemini API error: invalid mood JSON shape");
+    error.statusCode = 502;
+    throw error;
+  }
+};
+
+const getMoodPlan = async ({ userId, mood }) => {
+  const { error: insertError } = await supabase.from("mood_history").insert({
+    user_id: userId,
     mood,
-    createdAt: new Date().toISOString(),
   });
 
-  return {
-    mood,
-    ...plan,
-  };
+  if (insertError) {
+    throw insertError;
+  }
+
+  const [{ data: moodHistory }, { data: tasks }, { data: profile }] =
+    await Promise.all([
+      supabase
+        .from("mood_history")
+        .select("mood, created_at")
+        .eq("user_id", userId)
+        .gte("created_at", getLastTwoDaysISO())
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("daily_tasks")
+        .select("title, category, difficulty, completed")
+        .eq("user_id", userId)
+        .gte("created_at", getTodayISO())
+        .order("created_at", { ascending: true }),
+      supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+    ]);
+
+  const prompt = `
+Adjust today's Daily 3 tasks based on the student's current mood.
+Use last 2 days mood history and current tasks. If the user has low mood for 2 days, make tasks easier and smaller.
+Keep the message short, practical, and motivating.
+
+Profile: ${JSON.stringify(profile)}
+Current mood: ${mood}
+Mood last 2 days: ${JSON.stringify(moodHistory || [])}
+Today's tasks: ${JSON.stringify(tasks || [])}
+
+Return this exact JSON shape:
+{
+  "mood": "${mood}",
+  "difficulty": "easy",
+  "theme": "calm",
+  "message": "",
+  "adjustedDaily3": []
+}
+`;
+
+  const aiResult = await generateJSONPrompt(prompt);
+  validateMoodResponse(aiResult);
+
+  return aiResult;
 };
 
 module.exports = {

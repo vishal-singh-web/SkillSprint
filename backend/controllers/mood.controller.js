@@ -1,6 +1,6 @@
 const moodService = require("../services/mood.service");
 
-const adjustMood = (req, res, next) => {
+const adjustMood = async (req, res, next) => {
   try {
     const { mood } = req.body;
     const allowedMoods = ["low", "neutral", "high"];
@@ -19,7 +19,10 @@ const adjustMood = (req, res, next) => {
       });
     }
 
-    const result = moodService.getMoodPlan(mood);
+    const result = await moodService.getMoodPlan({
+      userId: req.user.id,
+      mood,
+    });
 
     return res.status(200).json(result);
   } catch (error) {

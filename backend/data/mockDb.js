@@ -2,35 +2,42 @@
 // Replace this file with Supabase queries when connecting a real database.
 
 const mockDb = {
-  dailyTasks: [
+  users: [
     {
-      id: 1,
-      title: "Solve 2 DSA problems",
-      difficulty: "medium",
-      completed: false,
-    },
-    {
-      id: 2,
-      title: "Improve one project README",
-      difficulty: "easy",
-      completed: false,
-    },
-    {
-      id: 3,
-      title: "Apply to 3 internships",
-      difficulty: "medium",
-      completed: false,
+      id: "user123",
+      name: "Demo User",
+      targetRole: "Frontend Developer",
+      skills: ["HTML", "CSS", "JavaScript", "React"],
+      skillScore: 62,
+      streak: 4,
     },
   ],
 
-  progress: {
-    streak: 5,
-    tasksCompleted: 12,
-    skillScore: 68,
-    interviewsCompleted: 3,
-  },
+  progress: [
+    {
+      userId: "user123",
+      tasksCompleted: 12,
+      interviewsCompleted: 2,
+      completionRate: 70,
+    },
+  ],
 
-  moodHistory: [],
+  moodHistory: [
+    {
+      userId: "user123",
+      mood: "low",
+      date: "2026-04-24",
+    },
+    {
+      userId: "user123",
+      mood: "neutral",
+      date: "2026-04-25",
+    },
+  ],
+
+  tasks: [],
+
+  skillGaps: [],
 
   interviewHistory: [],
 };

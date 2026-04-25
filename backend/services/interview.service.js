@@ -1,50 +1,110 @@
-const mockDb = require("../data/mockDb");
+const supabase = require("../config/supabase");
+const { generateJSONPrompt } = require("./gemini.service");
 
-const getReplyByMessage = (message) => {
-  const lowerMessage = message.toLowerCase();
+const validateInterviewResponse = (aiResult) => {
+  const isValid =
+    aiResult &&
+    typeof aiResult.reply === "string" &&
+    typeof aiResult.feedback === "string" &&
+    typeof aiResult.improvementTip === "string" &&
+    typeof aiResult.score === "number";
 
-  if (lowerMessage.includes("auth") || lowerMessage.includes("jwt")) {
-    return {
-      reply: "Can you explain how authentication works in your project?",
-      feedback: "Good start. Add more details about JWT, sessions, and security.",
-      score: 7,
-    };
+  if (!isValid) {
+    const error = new Error("Gemini API error: invalid interview JSON shape");
+    error.statusCode = 502;
+    throw error;
   }
-
-  if (lowerMessage.includes("react") || lowerMessage.includes("frontend")) {
-    return {
-      reply: "How did you manage state and component re-rendering in your frontend?",
-      feedback: "Mention state management, component structure, and performance choices.",
-      score: 7,
-    };
-  }
-
-  if (lowerMessage.includes("database") || lowerMessage.includes("mongodb")) {
-    return {
-      reply: "How did you design your database schema for this project?",
-      feedback: "Explain collections, relationships, indexes, and why you chose that design.",
-      score: 8,
-    };
-  }
-
-  return {
-    reply: "What was the hardest technical problem you solved in this project?",
-    feedback: "Give a specific example, explain your approach, and share the final result.",
-    score: 6,
-  };
 };
 
-const generateInterviewReply = (role, message) => {
-  const response = getReplyByMessage(message);
+const incrementInterviewProgress = async (userId) => {
+  const { data: progress, error } = await supabase
+    .from("progress")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
 
-  mockDb.interviewHistory.push({
-    role,
-    message,
-    response,
-    createdAt: new Date().toISOString(),
+  if (error) {
+    throw error;
+  }
+
+  const nextCount = (progress?.interviews_completed || 0) + 1;
+
+  const { error: upsertError } = await supabase.from("progress").upsert(
+    {
+      user_id: userId,
+      interviews_completed: nextCount,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" }
+  );
+
+  if (upsertError) {
+    throw upsertError;
+  }
+};
+
+const generateInterviewReply = async ({ userId, targetRole, message }) => {
+  const [{ data: profile }, { data: progress }, { data: latestSkillGap }] =
+    await Promise.all([
+      supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+      supabase
+        .from("progress")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("skill_gap_reports")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+  const prompt = `
+Act as a realistic mock interviewer.
+Read the candidate response carefully.
+Ask one role-specific follow-up interview question.
+Give one concise feedback line.
+Give a realistic score out of 10.
+Give one specific improvement tip.
+Do not be generic.
+
+Target role: ${targetRole}
+Profile: ${JSON.stringify(profile)}
+Progress: ${JSON.stringify(progress)}
+Latest skill gap: ${JSON.stringify(latestSkillGap)}
+Candidate message: ${message}
+
+Return this exact JSON shape:
+{
+  "reply": "",
+  "feedback": "",
+  "score": 7,
+  "improvementTip": ""
+}
+`;
+
+  const aiResult = await generateJSONPrompt(prompt);
+  validateInterviewResponse(aiResult);
+
+  const { error } = await supabase.from("interview_messages").insert({
+    user_id: userId,
+    target_role: targetRole,
+    user_message: message,
+    ai_reply: aiResult.reply,
+    feedback: aiResult.feedback,
+    score: aiResult.score,
+    improvement_tip: aiResult.improvementTip,
   });
 
-  return response;
+  if (error) {
+    throw error;
+  }
+
+  await incrementInterviewProgress(userId);
+
+  return aiResult;
 };
 
 module.exports = {

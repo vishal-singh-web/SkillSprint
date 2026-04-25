@@ -1,13 +1,13 @@
 const interviewService = require("../services/interview.service");
 
-const sendInterviewMessage = (req, res, next) => {
+const sendInterviewMessage = async (req, res, next) => {
   try {
-    const { role, message } = req.body;
+    const { targetRole, message } = req.body;
 
-    if (!role || typeof role !== "string") {
+    if (!targetRole || typeof targetRole !== "string") {
       return res.status(400).json({
         success: false,
-        message: "role is required and must be a string",
+        message: "targetRole is required and must be a string",
       });
     }
 
@@ -18,7 +18,11 @@ const sendInterviewMessage = (req, res, next) => {
       });
     }
 
-    const result = interviewService.generateInterviewReply(role, message);
+    const result = await interviewService.generateInterviewReply({
+      userId: req.user.id,
+      targetRole,
+      message,
+    });
 
     return res.status(200).json(result);
   } catch (error) {

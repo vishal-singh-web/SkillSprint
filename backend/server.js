@@ -2,37 +2,43 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 
+dotenv.config();
+
+const requireAuth = require("./middleware/auth.middleware");
+const authRoutes = require("./routes/auth.routes");
+const profileRoutes = require("./routes/profile.routes");
 const skillGapRoutes = require("./routes/skillgap.routes");
 const tasksRoutes = require("./routes/tasks.routes");
 const moodRoutes = require("./routes/mood.routes");
 const interviewRoutes = require("./routes/interview.routes");
 const progressRoutes = require("./routes/progress.routes");
 
-dotenv.config();
-
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS allows a separate HTML/CSS/JS or React frontend to call this backend.
+// Allows your frontend app to call this backend.
 app.use(cors());
 
-// This lets Express read JSON request bodies.
+// Allows Express to read JSON request bodies.
 app.use(express.json());
 
-app.get("/", (req, res) => {
+// Only health check is public.
+app.get("/health", (req, res) => {
   res.json({
     message: "SkillSprint 2026 backend is running",
     health: "ok",
   });
 });
 
-app.use("/api/skill-gap", skillGapRoutes);
-app.use("/api/daily-tasks", tasksRoutes);
-app.use("/api/mood", moodRoutes);
-app.use("/api/interview", interviewRoutes);
-app.use("/api/progress", progressRoutes);
+// All user-specific API routes require a valid Supabase JWT.
+app.use("/api/auth", requireAuth, authRoutes);
+app.use("/api/profile", requireAuth, profileRoutes);
+app.use("/api/skill-gap", requireAuth, skillGapRoutes);
+app.use("/api/daily-tasks", requireAuth, tasksRoutes);
+app.use("/api/mood", requireAuth, moodRoutes);
+app.use("/api/interview", requireAuth, interviewRoutes);
+app.use("/api/progress", requireAuth, progressRoutes);
 
-// Handles routes that do not exist.
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -40,13 +46,12 @@ app.use((req, res) => {
   });
 });
 
-// Central error handler for unexpected errors.
 app.use((err, req, res, next) => {
-  console.error("Server error:", err);
+  console.error("Server error:", err.message);
 
-  res.status(500).json({
+  res.status(err.statusCode || 500).json({
     success: false,
-    message: "Something went wrong on the server",
+    message: err.statusCode ? err.message : "API error",
   });
 });
 
