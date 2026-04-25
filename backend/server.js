@@ -12,6 +12,7 @@ const tasksRoutes = require("./routes/tasks.routes");
 const moodRoutes = require("./routes/mood.routes");
 const interviewRoutes = require("./routes/interview.routes");
 const progressRoutes = require("./routes/progress.routes");
+const agentRoutes = require("./routes/agent.routes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -30,14 +31,17 @@ app.get("/health", (req, res) => {
   });
 });
 
-// All user-specific API routes require a valid Supabase JWT.
-app.use("/api/auth", requireAuth, authRoutes);
+// Signup and login are public. /me and /logout are protected inside auth.routes.js.
+app.use("/api/auth", authRoutes);
+
+// All user-specific API routes below require a valid Supabase JWT.
 app.use("/api/profile", requireAuth, profileRoutes);
 app.use("/api/skill-gap", requireAuth, skillGapRoutes);
 app.use("/api/daily-tasks", requireAuth, tasksRoutes);
 app.use("/api/mood", requireAuth, moodRoutes);
 app.use("/api/interview", requireAuth, interviewRoutes);
 app.use("/api/progress", requireAuth, progressRoutes);
+app.use("/api/agent", requireAuth, agentRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

@@ -8,7 +8,7 @@ export default function Nav({ variant = "marketing", rightSlot }) {
       <div className="nav-inner">
         <Link href={variant === "dashboard" ? "/dashboard" : "/"} className="logo">
           <span className="logo-mark">&gt;_</span>
-          <span className="logo-text">CareerFlow</span>
+          <span className="logo-text">SkillSprint</span>
           <span className="logo-batch">2026</span>
         </Link>
 

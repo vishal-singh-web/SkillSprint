@@ -19,7 +19,7 @@ const adjustMood = async (req, res, next) => {
       });
     }
 
-    const result = await moodService.getMoodPlan({
+    const result = await moodService.recordMood({
       userId: req.user.id,
       mood,
     });
@@ -30,6 +30,24 @@ const adjustMood = async (req, res, next) => {
   }
 };
 
+const getMoodHistory = async (req, res, next) => {
+  try {
+    const moodHistory = await moodService.getMoodHistory(req.user.id);
+
+    return res.status(200).json({
+      moodHistory,
+      todayMood: moodHistory.find((entry) => {
+        return (
+          new Date(entry.createdAt).toDateString() === new Date().toDateString()
+        );
+      })?.mood || null,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   adjustMood,
+  getMoodHistory,
 };

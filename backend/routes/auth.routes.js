@@ -1,16 +1,12 @@
 const express = require("express");
+const requireAuth = require("../middleware/auth.middleware");
+const { signup, login, logout, me } = require("../controllers/auth.controller");
 
 const router = express.Router();
 
-// Supabase handles signup/login on the frontend.
-// This route confirms that the backend accepted the JWT.
-router.get("/me", (req, res) => {
-  res.json({
-    user: {
-      id: req.user.id,
-      email: req.user.email,
-    },
-  });
-});
+router.post("/signup", signup);
+router.post("/login", login);
+router.post("/logout", requireAuth, logout);
+router.get("/me", requireAuth, me);
 
 module.exports = router;

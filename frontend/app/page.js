@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
-import { cfGetSession } from "@/lib/auth";
+import { isLoggedIn } from "@/lib/auth";
 
 const AGENT_TEXT =
   "The market is shifting from REST to Agentic RAG. Your varta-chat repo uses Socket.io — adding a LangGraph layer for automated moderation lifts your Agentic Readiness Score by 25%. Estimated 4-hour ship. Want me to scaffold the PR?";
@@ -74,8 +74,7 @@ export default function HomePage() {
 
   function bootAgent(e) {
     e.preventDefault();
-    const session = cfGetSession();
-    router.push(session ? "/dashboard" : "/signup");
+    router.push(isLoggedIn() ? "/dashboard" : "/signup");
   }
 
   function toggleTask(i) {
@@ -132,7 +131,7 @@ export default function HomePage() {
           <p className="lead" style={{ marginTop: 20 }}>
             Your seniors graduated into REST APIs and React tutorials. You&apos;re graduating into
             LangGraph, Agentic RAG, and a market that rewrites itself every quarter. The old
-            playbook is a trap. CareerFlow names the trap.
+            playbook is a trap. SkillSprint names the trap.
           </p>
         </div>
 
@@ -140,7 +139,7 @@ export default function HomePage() {
           {[
             { num: "01 / ENEMY", tag: "URGENT", title: "Skill Obsolescence", body: "The repo you spent six months on uses libraries the market is already moving past. You don't need another tutorial — you need a surgeon who tells you exactly which line to delete." },
             { num: "02 / ENEMY", tag: "DRAINING", title: "Application Fatigue", body: "200 applications. 0 callbacks. Each one feels like screaming into a CSV. You stop tailoring resumes. You start copy-pasting cover letters. Then you stop applying entirely." },
-            { num: "03 / ENEMY", tag: "SILENT", title: "Mental Burnout", body: "\"Bed rotting\" between rejection emails. Doomscrolling Twitter for proof someone else made it. Telling yourself you'll start tomorrow. CareerFlow knows what tomorrow looks like." },
+            { num: "03 / ENEMY", tag: "SILENT", title: "Mental Burnout", body: "\"Bed rotting\" between rejection emails. Doomscrolling Twitter for proof someone else made it. Telling yourself you'll start tomorrow. SkillSprint knows what tomorrow looks like." },
           ].map((e) => (
             <div className="enemy reveal" key={e.title}>
               <div className="num">{e.num}</div>
@@ -174,7 +173,7 @@ export default function HomePage() {
             <div className="mock">
               <div className="mock-head">
                 <div className="lights"><span /><span /><span /></div>
-                <span className="title">careerflow-agent — scanning ~/repos</span>
+                <span className="title">skillsprint-agent — scanning ~/repos</span>
               </div>
               <div className="mock-body">
                 <div className="scanner-row">
@@ -337,7 +336,7 @@ export default function HomePage() {
           </div>
           <div className="feature-text reveal">
             <div className="eyebrow"><span className="dot" />FEATURE 04 / PROOF OF WORK</div>
-            <h2 className="h-section">A live portfolio recruiters can&apos;t ignore.</h2>
+            <h2 className="h-section">A live proof-of-work page your opportunities can&apos;t ignore.</h2>
             <p className="lead">
               Every commit, every Hard solved, every shipped feature ticks onto your public
               Proof-of-Work page in real time. The agent writes the impact summaries so you
@@ -346,7 +345,7 @@ export default function HomePage() {
             <ul>
               <li>Auto-syncs from GitHub · LeetCode · deployed projects</li>
               <li>Agent-generated, brutally honest project descriptions</li>
-              <li>Recruiters get a live link, not a PDF graveyard</li>
+              <li>Your strongest work gets a live link, not a PDF graveyard</li>
               <li>One DM template — one URL — zero &quot;kindly find attached&quot;</li>
             </ul>
           </div>
@@ -364,9 +363,9 @@ export default function HomePage() {
 
         <div className="faq-list">
           {[
-            { q: "Is this just another job tracker with extra steps?", a: "No. Trackers are passive — they wait for you to log things. CareerFlow is agentic — it pings you at 8 AM with three specific tasks, scans your repos for stale tech, and pivots your plan when you're burnt out. You don't manage it. It manages you." },
+            { q: "Is this just another job tracker with extra steps?", a: "No. Trackers are passive — they wait for you to log things. SkillSprint is agentic — it pings you at 8 AM with three specific tasks, scans your repos for stale tech, and pivots your plan when you're burnt out. You don't manage it. It manages you." },
             { q: "Do I have to give it my GitHub token?", a: "Read-only access on public repos by default. You can grant private access for deeper scans. Tokens are encrypted, never used outside scans, and you can revoke at any time from your settings page." },
-            { q: "What if I'm not from a top-tier college?", a: "Especially built for you. The Proof-of-Work portfolio is the whole point — recruiters who care about your repo, not your campus. CareerFlow ranks high-intent roles (recruiters who actually open cold DMs from non-tier-1 students) and surfaces them first." },
+            { q: "What if I'm not from a top-tier college?", a: "Especially built for you. The Proof-of-Work portfolio is the whole point — your repo, not your campus, becomes the signal. SkillSprint ranks high-intent roles and surfaces them first." },
             { q: "Will the agent shame me if I miss a day?", a: "No. The streak resets, that's it. The mood tracker exists exactly so a bad day doesn't snowball. If you mark anxious twice in a row, the agent pivots — it doesn't lecture." },
             { q: "Free, paid, freemium, what's the deal?", a: "Free for the entire 2026 batch through placement season. We'll add premium features post-graduation, but the core agent — daily tasks, scanner, mood tracker, portfolio — stays free for students." },
             { q: "Who's behind this?", a: "A small team of 2024 grads who survived their own placement season and built the tool they wished existed. Backed by a few angels who were sick of seeing burnt-out students." },
@@ -396,7 +395,7 @@ export default function HomePage() {
       {/* FOOTER */}
       <footer className="footer">
         <div className="footer-inner">
-          <div>© 2026 CareerFlow · Built by people who shipped</div>
+          <div>© 2026 SkillSprint · Built by people who shipped</div>
           <div className="footer-links">
             <a href="#features">Features</a>
             <a href="#faq">FAQ</a>

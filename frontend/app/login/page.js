@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
-import { cfGetSession, cfLogin } from "@/lib/auth";
+import { isLoggedIn } from "@/lib/auth";
+import { login } from "@/lib/api";
 import { showToast } from "@/components/Toast";
 
 export default function LoginPage() {
@@ -12,25 +13,29 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (cfGetSession()) router.replace("/dashboard");
+    if (isLoggedIn()) router.replace("/dashboard");
   }, [router]);
 
-  function onSubmit(e) {
+  async function onSubmit(e) {
     e.preventDefault();
     setError("");
     if (!email.trim() || !password) {
       setError("Both fields are required.");
       return;
     }
-    const result = cfLogin(email.trim(), password);
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    try {
+      setLoading(true);
+      await login({ email: email.trim(), password });
+      showToast("Welcome back to SkillSprint.");
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-    showToast("Welcome back, " + result.user.name.split(" ")[0] + ".");
-    setTimeout(() => router.push("/dashboard"), 600);
   }
 
   return (
@@ -47,7 +52,7 @@ export default function LoginPage() {
       <main className="auth-wrap">
         <div className="auth-card">
           <h1>Welcome back.</h1>
-          <p className="sub">The agent has been waiting. Log in and let&apos;s get back to it.</p>
+          <p className="sub">SkillSprint has been waiting. Log in and let&apos;s get back to it.</p>
 
           <div className={"error-msg" + (error ? " show" : "")}>{error}</div>
 
@@ -75,18 +80,12 @@ export default function LoginPage() {
               />
             </div>
             <button type="submit" className="btn btn-primary btn-lg btn-block">
-              Log in &rarr;
+              {loading ? "Logging in..." : "Log in →"}
             </button>
           </form>
 
-          <div className="demo-creds">
-            <strong>// demo credentials</strong>
-            email: demo@careerflow.com<br />
-            password: careerflow2026
-          </div>
-
           <div className="auth-foot">
-            New to CareerFlow? <Link href="/signup">Boot the agent &rarr;</Link>
+            New to SkillSprint? <Link href="/signup">Boot the agent &rarr;</Link>
           </div>
         </div>
       </main>

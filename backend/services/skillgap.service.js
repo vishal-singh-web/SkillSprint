@@ -1,5 +1,6 @@
 const supabase = require("../config/supabase");
 const { generateJSONPrompt } = require("./gemini.service");
+const profileService = require("./profile.service");
 
 const getLastTwoDaysISO = () => {
   const date = new Date();
@@ -9,6 +10,7 @@ const getLastTwoDaysISO = () => {
 
 const validateSkillGapResponse = (aiResult) => {
   const requiredArrays = [
+    "detectedSkills",
     "strengths",
     "missingSkills",
     "projectSuggestions",
@@ -19,10 +21,84 @@ const validateSkillGapResponse = (aiResult) => {
   const isValid = requiredArrays.every((key) => Array.isArray(aiResult?.[key]));
 
   if (!isValid) {
-    const error = new Error("Gemini API error: invalid skill-gap JSON shape");
+    const error = new Error("OpenRouter API error: invalid skill-gap JSON shape");
     error.statusCode = 502;
     throw error;
   }
+};
+
+const githubRepoToReadmeUrl = (repoUrl) => {
+  try {
+    const url = new URL(repoUrl.trim());
+
+    if (url.hostname !== "github.com") {
+      return null;
+    }
+
+    const [owner, repo] = url.pathname.split("/").filter(Boolean);
+
+    if (!owner || !repo) {
+      return null;
+    }
+
+    return `https://raw.githubusercontent.com/${owner}/${repo.replace(
+      /\.git$/,
+      ""
+    )}/main/README.md`;
+  } catch {
+    return null;
+  }
+};
+
+const fetchGithubReadme = async (repoUrl) => {
+  const readmeUrl = githubRepoToReadmeUrl(repoUrl);
+
+  if (!readmeUrl) {
+    const error = new Error("Please paste a valid GitHub repository URL");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const response = await fetch(readmeUrl);
+
+  if (response.status === 404) {
+    const error = new Error("README not found. Create a README, then paste again.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (!response.ok) {
+    const error = new Error("Could not fetch GitHub README");
+    error.statusCode = response.status;
+    throw error;
+  }
+
+  return {
+    readmeUrl,
+    text: await response.text(),
+  };
+};
+
+const buildSourceText = async ({ sourceType, resumeText, repoUrl, manualSkills }) => {
+  if (sourceType === "github") {
+    const readme = await fetchGithubReadme(repoUrl);
+    return {
+      sourceLabel: `GitHub README: ${readme.readmeUrl}`,
+      text: readme.text,
+    };
+  }
+
+  if (sourceType === "manual") {
+    return {
+      sourceLabel: "Manual skills",
+      text: `Manual skills entered by user: ${(manualSkills || []).join(", ")}`,
+    };
+  }
+
+  return {
+    sourceLabel: "Resume text",
+    text: resumeText,
+  };
 };
 
 const saveDaily3FromSkillGap = async ({ userId, daily3 }) => {
@@ -53,7 +129,21 @@ const saveDaily3FromSkillGap = async ({ userId, daily3 }) => {
   }
 };
 
-const analyzeResumeText = async ({ userId, targetRole, resumeText }) => {
+const analyzeResumeText = async ({
+  userId,
+  targetRole,
+  resumeText,
+  sourceType = "resume",
+  repoUrl,
+  manualSkills,
+}) => {
+  const source = await buildSourceText({
+    sourceType,
+    resumeText,
+    repoUrl,
+    manualSkills,
+  });
+
   const [{ data: profile }, { data: progress }, { data: moods }] =
     await Promise.all([
       supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
@@ -71,34 +161,40 @@ const analyzeResumeText = async ({ userId, targetRole, resumeText }) => {
     ]);
 
   const prompt = `
-Analyze this student's resume/project text for placement preparation.
-Give real, personalized results. Do not return generic demo data.
-Use the user's current skills, target role, resume/project text, progress, and last 2 days mood history.
-Compare the user's skills with practical 2025-2026 Indian fresher hiring trends for this target role.
-Consider what companies expect now: role-specific fundamentals, project quality, deployment, GitHub/README, DSA/interview readiness, internships, communication, and AI/tooling awareness when relevant.
-Find exact skill gaps and project weaknesses from the resume text.
-Daily3 should contain one DSA/interview task, one project improvement task, and one job/application task.
-Keep arrays short but specific.
+Analyze this source for placement preparation and skill extraction.
+Source type: ${sourceType}
+Source label: ${source.sourceLabel}
+
+Extract specific technical skills from the source. For GitHub README text, infer concrete skills from libraries, architecture, features, APIs, deployment, database, auth, AI, and tooling mentioned.
+Compare the extracted/current skills with practical 2025-2026 Indian fresher hiring trends for the target role.
+Do not generate today's task plan as an immediate UI instruction. The user will get updated Daily 3 tasks next time they generate tasks.
 
 Target role: ${targetRole}
-Skills: ${JSON.stringify(profile?.skills || [])}
+Current profile skills: ${JSON.stringify(profile?.skills || [])}
 Profile: ${JSON.stringify(profile)}
 Progress: ${JSON.stringify(progress)}
 Mood last 2 days: ${JSON.stringify(moods || [])}
-Resume/project text: ${resumeText}
+Source text: ${source.text}
 
 Return this exact JSON shape:
 {
-  "strengths": ["specific strength from profile or resume"],
-  "missingSkills": ["specific skill missing for target role"],
+  "detectedSkills": ["specific extracted skill"],
+  "strengths": ["specific strength from source"],
+  "missingSkills": ["specific missing skill for target role"],
   "projectSuggestions": ["specific project improvement"],
   "recommendedRoadmap": ["specific roadmap step for next few months"],
-  "daily3": ["one DSA/interview task", "one project task", "one application task"]
+  "daily3": ["task idea for next generated plan", "task idea for next generated plan", "task idea for next generated plan"],
+  "message": "Skills updated. Your next generated Daily 3 will use this analysis."
 }
 `;
 
   const aiResult = await generateJSONPrompt(prompt);
   validateSkillGapResponse(aiResult);
+
+  const updatedProfile = await profileService.updateSkills({
+    userId,
+    skills: aiResult.detectedSkills,
+  });
 
   const { error } = await supabase.from("skill_gap_reports").insert({
     user_id: userId,
@@ -115,7 +211,14 @@ Return this exact JSON shape:
 
   await saveDaily3FromSkillGap({ userId, daily3: aiResult.daily3 });
 
-  return aiResult;
+  return {
+    ...aiResult,
+    sourceType,
+    updatedSkills: updatedProfile.skills,
+    message:
+      aiResult.message ||
+      "Skills updated. Your next generated Daily 3 will use this analysis.",
+  };
 };
 
 module.exports = {

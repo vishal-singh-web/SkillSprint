@@ -4,25 +4,28 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
-import { cfGetSession, cfRegister } from "@/lib/auth";
+import { isLoggedIn } from "@/lib/auth";
+import { signup } from "@/lib/api";
 import { showToast } from "@/components/Toast";
 
 export default function SignupPage() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [github, setGithub] = useState("");
+  const [targetRole, setTargetRole] = useState("Frontend Developer");
+  const [skills, setSkills] = useState("HTML, CSS, JavaScript");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (cfGetSession()) router.replace("/dashboard");
+    if (isLoggedIn()) router.replace("/dashboard");
   }, [router]);
 
-  function onSubmit(e) {
+  async function onSubmit(e) {
     e.preventDefault();
     setError("");
-    if (!name || !github || !email || !password) {
+    if (!name || !targetRole || !skills || !email || !password) {
       setError("All fields are required.");
       return;
     }
@@ -30,18 +33,22 @@ export default function SignupPage() {
       setError("Password must be at least 6 characters.");
       return;
     }
-    const result = cfRegister({
-      name,
-      github: github.replace(/^@/, ""),
-      email,
-      password,
-    });
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    try {
+      setLoading(true);
+      await signup({
+        name,
+        email,
+        password,
+        targetRole,
+        skills: skills.split(",").map((skill) => skill.trim()).filter(Boolean),
+      });
+      showToast("SkillSprint account created. Redirecting...");
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-    showToast("Agent booted. Redirecting...");
-    setTimeout(() => router.push("/dashboard"), 700);
   }
 
   return (
@@ -75,14 +82,25 @@ export default function SignupPage() {
               />
             </div>
             <div className="field">
-              <label htmlFor="github">GitHub handle</label>
+              <label htmlFor="targetRole">Target role</label>
               <input
                 type="text"
-                id="github"
+                id="targetRole"
                 required
-                placeholder="priyak"
-                value={github}
-                onChange={(e) => setGithub(e.target.value)}
+                placeholder="Frontend Developer"
+                value={targetRole}
+                onChange={(e) => setTargetRole(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="skills">Skills</label>
+              <input
+                type="text"
+                id="skills"
+                required
+                placeholder="HTML, CSS, JavaScript, React"
+                value={skills}
+                onChange={(e) => setSkills(e.target.value)}
               />
             </div>
             <div className="field">
@@ -109,7 +127,7 @@ export default function SignupPage() {
               />
             </div>
             <button type="submit" className="btn btn-primary btn-lg btn-block">
-              Boot Agent &rarr;
+              {loading ? "Creating account..." : "Boot Agent →"}
             </button>
           </form>
 

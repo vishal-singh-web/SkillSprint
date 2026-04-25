@@ -17,11 +17,11 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata = {
-  title: "CareerFlow 2026 — Your Agentic Placement Partner",
+  title: "SkillSprint 2026 — Your AI Placement Partner",
   description:
     "Not a Notion tracker. An autonomous AI coach that pulls the 2026 batch through placement season — fighting skill obsolescence, application fatigue, and burnout.",
   openGraph: {
-    title: "CareerFlow 2026",
+    title: "SkillSprint 2026",
     description: "An autonomous AI coach for the 2026 placement batch.",
     type: "website",
   },

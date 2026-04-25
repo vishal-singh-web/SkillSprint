@@ -32,7 +32,7 @@ const mapTask = (task) => ({
 
 const saveTasks = async ({ userId, tasks }) => {
   if (!Array.isArray(tasks) || tasks.length !== 3) {
-    const error = new Error("Gemini API error: expected exactly 3 tasks");
+    const error = new Error("OpenRouter API error: expected exactly 3 tasks");
     error.statusCode = 502;
     throw error;
   }
@@ -50,7 +50,7 @@ const saveTasks = async ({ userId, tasks }) => {
   });
 
   if (hasInvalidTask) {
-    const error = new Error("Gemini API error: invalid daily task JSON shape");
+    const error = new Error("OpenRouter API error: invalid daily task JSON shape");
     error.statusCode = 502;
     throw error;
   }

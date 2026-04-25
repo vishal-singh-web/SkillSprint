@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export const TOAST_EVENT = "cf-toast";
+export const TOAST_EVENT = "skillsprint-toast";
 
 export function showToast(message) {
   if (typeof window === "undefined") return;

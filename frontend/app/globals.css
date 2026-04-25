@@ -1,4 +1,4 @@
-/* CareerFlow 2026 — Vanilla CSS */
+/* SkillSprint 2026 — Vanilla CSS */
 
 :root {
   --bg: #0a0b0a;
@@ -552,14 +552,27 @@ h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.1; font-weight: 700; }
 .error-msg.show { display: block; }
 
 /* ------- Dashboard ------- */
-.dash-shell { display: grid; grid-template-columns: 240px 1fr; min-height: calc(100vh - 70px); }
-.dash-side { border-right: 1px solid var(--border); padding: 24px 16px; background: var(--bg-elev); }
+.dash-shell { display: grid; grid-template-columns: 280px 1fr; min-height: calc(100vh - 70px); }
+.dash-side {
+  position: sticky;
+  top: 70px;
+  height: calc(100vh - 70px);
+  border-right: 1px solid var(--border);
+  padding: 24px 16px;
+  background: var(--bg-elev);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 18px;
+  overflow: hidden;
+}
 .dash-user { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 10px; background: var(--bg-card); margin-bottom: 24px; }
 .dash-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--lime); color: #0a0b0a; display: flex; align-items: center; justify-content: center; font-weight: 700; }
 .dash-user-info .n { font-size: 14px; font-weight: 600; }
 .dash-user-info .h { font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
 
-.dash-nav a {
+.dash-nav a,
+.dash-nav button {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -569,15 +582,52 @@ h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.1; font-weight: 700; }
   color: var(--text-dim);
   margin-bottom: 4px;
   transition: background 120ms ease, color 120ms ease;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
 }
-.dash-nav a:hover { background: var(--bg-card); color: var(--text); }
-.dash-nav a.active { background: rgba(199, 245, 58, 0.08); color: var(--lime); }
+.dash-nav a:hover,
+.dash-nav button:hover { background: var(--bg-card); color: var(--text); }
+.dash-nav a.active,
+.dash-nav button.active { background: rgba(199, 245, 58, 0.08); color: var(--lime); }
 .dash-nav .key { font-family: var(--mono); color: var(--text-faint); margin-left: auto; font-size: 11px; }
 
 .dash-main { padding: 32px 40px; }
 .dash-h { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 32px; }
 .dash-h h1 { font-size: 28px; }
 .dash-h .sub { color: var(--text-dim); font-size: 14px; }
+
+.dash-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mood-toggle {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(72px, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+}
+.mood-toggle button {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-dim);
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.mood-toggle button.active {
+  background: var(--lime);
+  color: #0a0b0a;
+  font-weight: 700;
+}
 
 .dash-grid {
   display: grid;
@@ -591,15 +641,91 @@ h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.1; font-weight: 700; }
 .dash-card h3 .meta { font-family: var(--mono); font-size: 11px; color: var(--text-faint); font-weight: 500; }
 .dash-card .desc { color: var(--text-dim); font-size: 13px; margin-bottom: 20px; }
 
-@media (max-width: 920px) { .dash-shell { grid-template-columns: 1fr; } .dash-side { display: none; } .dash-main { padding: 24px 20px; } .dash-grid { grid-template-columns: 1fr; } }
+.side-agent {
+  min-height: 0;
+  max-height: 48vh;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.side-agent .label {
+  color: var(--lime);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.side-agent-text {
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+.side-agent-input {
+  display: flex;
+  gap: 8px;
+}
+.side-agent-input input {
+  min-width: 0;
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.side-agent-input button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--lime);
+  color: #0a0b0a;
+  font-weight: 700;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.skill-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.skill-chip {
+  border: 1px solid var(--border);
+  background: rgba(199, 245, 58, 0.08);
+  color: var(--lime);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: var(--mono);
+}
+
+@media (max-width: 920px) { .dash-shell { grid-template-columns: 1fr; } .dash-side { display: none; } .dash-main { padding: 24px 20px; } .dash-grid { grid-template-columns: 1fr; } .dash-h, .dash-top-actions { align-items: stretch; flex-direction: column; } }
 
 .empty-streak { text-align: center; padding: 24px; }
 .empty-streak .num { font-family: var(--mono); font-size: 56px; color: var(--lime); font-weight: 700; line-height: 1; }
 .empty-streak .lbl { color: var(--text-dim); font-size: 13px; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--mono); }
 
 .scan-input { display: flex; gap: 8px; margin-bottom: 16px; }
-.scan-input input { flex: 1; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: 13px; outline: none; }
-.scan-input input:focus { border-color: var(--lime); }
+.scan-input input,
+.scan-input textarea { flex: 1; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: 13px; outline: none; resize: vertical; }
+.scan-input input:focus,
+.scan-input textarea:focus { border-color: var(--lime); }
+.scan-input .code-textarea {
+  min-height: 180px;
+  background: #050605;
+  color: var(--lime);
+  line-height: 1.6;
+}
 
 .toast {
   position: fixed;

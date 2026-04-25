@@ -1,6 +1,6 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-const cleanGeminiText = (text) => {
+const cleanAIText = (text) => {
   return String(text || "")
     .replace(/```json/gi, "")
     .replace(/```/g, "")
@@ -8,12 +8,12 @@ const cleanGeminiText = (text) => {
 };
 
 const parseJSONSafely = (text) => {
-  const cleanedText = cleanGeminiText(text);
+  const cleanedText = cleanAIText(text);
 
   try {
     return JSON.parse(cleanedText);
   } catch (error) {
-    // Extra safety if the model accidentally adds text around JSON.
+    // Extra safety if a model accidentally adds text around the JSON.
     const firstBrace = cleanedText.indexOf("{");
     const lastBrace = cleanedText.lastIndexOf("}");
 
@@ -35,37 +35,67 @@ const createApiError = (message, statusCode = 502) => {
   return error;
 };
 
+const getOpenRouterKey = () => {
+  return process.env.OPEN_ROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
+};
+
 const generateJSONPrompt = async (prompt) => {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = getOpenRouterKey();
 
     if (!apiKey || apiKey.trim() === "") {
-      throw createApiError("Gemini API error: GEMINI_API_KEY is missing");
+      throw createApiError(
+        "OpenRouter API error: OPEN_ROUTER_API_KEY is missing"
+      );
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0.9,
-      },
-    });
-
-    const finalPrompt = `
+    const systemPrompt = `
 You are an AI placement prep coach for Indian 2026 engineering students.
 Return ONLY valid JSON. No markdown. No explanation.
 Do not reuse generic demo answers. Personalize using every user detail provided.
 Use practical 2025-2026 Indian fresher hiring expectations for the target role, including role-specific skills, portfolio quality, DSA/interview readiness, internships, GitHub, deployment, communication, and application consistency.
-
-${prompt}
 `;
 
-    const result = await model.generateContent(finalPrompt);
-    const parsed = parseJSONSafely(result.response.text());
+    const response = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.APP_URL || "http://localhost:3000",
+        "X-Title": "SkillSprint 2026",
+      },
+      body: JSON.stringify({
+        model: process.env.OPENROUTER_MODEL || "openrouter/free",
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt,
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        temperature: 0.9,
+        response_format: {
+          type: "json_object",
+        },
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      const message =
+        data?.error?.message || data?.message || "OpenRouter request failed";
+      throw createApiError(`OpenRouter API error: ${message}`, response.status);
+    }
+
+    const content = data?.choices?.[0]?.message?.content;
+    const parsed = parseJSONSafely(content);
 
     if (!parsed) {
-      throw createApiError("Gemini API error: invalid JSON response");
+      throw createApiError("OpenRouter API error: invalid JSON response");
     }
 
     return parsed;
@@ -74,7 +104,7 @@ ${prompt}
       throw error;
     }
 
-    throw createApiError(`Gemini API error: ${error.message}`);
+    throw createApiError(`OpenRouter API error: ${error.message}`);
   }
 };
 
