@@ -95,8 +95,20 @@ const createApiError = (message, statusCode = 502) => {
   return error;
 };
 
-const getOpenRouterKey = () => {
-  return process.env.OPEN_ROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
+const getOpenRouterKeys = () => {
+  const keys = [
+    process.env.OPEN_ROUTER_API_KEY1,
+    process.env.OPEN_ROUTER_API_KEY2,
+    process.env.OPEN_ROUTER_API_KEY3,
+    process.env.OPEN_ROUTER_API_KEY4,
+    process.env.OPEN_ROUTER_API_KEY5,
+    process.env.OPEN_ROUTER_API_KEY6,
+    process.env.OPEN_ROUTER_API_KEY7,
+  ]
+    .map((key) => String(key || "").trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(keys));
 };
 
 const callOpenRouter = async ({ apiKey, prompt, temperature }) => {
@@ -155,11 +167,11 @@ Use practical 2025-2026 Indian fresher hiring expectations for the target role, 
 
 const generateJSONPrompt = async (prompt) => {
   try {
-    const apiKey = getOpenRouterKey();
+    const apiKeys = getOpenRouterKeys();
 
-    if (!apiKey || apiKey.trim() === "") {
+    if (apiKeys.length === 0) {
       throw createApiError(
-        "OpenRouter API error: OPEN_ROUTER_API_KEY is missing"
+        "OpenRouter API error: OPEN_ROUTER_API_KEY1 to OPEN_ROUTER_API_KEY7 are missing"
       );
     }
 
@@ -174,23 +186,44 @@ Your previous response may have been invalid. Return one valid JSON object only.
     ];
 
     let lastContent = "";
+    let lastError = null;
 
-    for (const attempt of attempts) {
-      lastContent = await callOpenRouter({
-        apiKey,
-        prompt: attempt.prompt,
-        temperature: attempt.temperature,
-      });
+    for (let keyIndex = 0; keyIndex < apiKeys.length; keyIndex += 1) {
+      const apiKey = apiKeys[keyIndex];
 
-      const parsed = parseJSONSafely(lastContent);
+      for (const attempt of attempts) {
+        try {
+          lastContent = await callOpenRouter({
+            apiKey,
+            prompt: attempt.prompt,
+            temperature: attempt.temperature,
+          });
 
-      if (parsed) {
-        return parsed;
+          const parsed = parseJSONSafely(lastContent);
+
+          if (parsed) {
+            return parsed;
+          }
+
+          lastError = createApiError(
+            `OpenRouter API error: invalid JSON response from key ${keyIndex + 1}`
+          );
+        } catch (error) {
+          lastError = error;
+        }
       }
+
+      console.warn(
+        `OpenRouter key ${keyIndex + 1} failed after ${attempts.length} attempts. Trying next key.`
+      );
     }
 
     console.error("OpenRouter invalid JSON content:", lastContent.slice(0, 500));
-    throw createApiError("OpenRouter API error: invalid JSON response");
+    throw createApiError(
+      lastError?.message ||
+        "OpenRouter API error: all configured keys failed",
+      lastError?.statusCode || 502
+    );
   } catch (error) {
     if (error.statusCode) {
       throw error;
