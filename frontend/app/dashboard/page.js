@@ -747,6 +747,14 @@ export default function DashboardPage() {
                       )}
                     </div>
                   )}
+                  {busy.interview && !busy.finalReport && !interview?.isComplete && (
+                    <div className="activity-list">
+                      <div className="act-row">
+                        <div className="act-time">Question</div>
+                        <div className="act-text">Question loading...</div>
+                      </div>
+                    </div>
+                  )}
                   {busy.finalReport && (
                     <div className="activity-list">
                       <div className="act-row">
