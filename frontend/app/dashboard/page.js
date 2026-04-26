@@ -15,6 +15,8 @@ const emptyProgress = {
   completionRate: 0,
 };
 
+const INTERVIEW_TRANSCRIPT_KEY = "skillsprint_interview_transcript";
+
 export default function DashboardPage() {
   const router = useRouter();
   const [profile, setProfile] = useState(null);
@@ -67,6 +69,26 @@ export default function DashboardPage() {
       day: "2-digit",
       month: "short",
     });
+  };
+
+  const saveInterviewTranscript = (items) => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(INTERVIEW_TRANSCRIPT_KEY, JSON.stringify(items));
+  };
+
+  const readInterviewTranscript = () => {
+    if (typeof window === "undefined") return [];
+
+    try {
+      return JSON.parse(localStorage.getItem(INTERVIEW_TRANSCRIPT_KEY) || "[]");
+    } catch {
+      return [];
+    }
+  };
+
+  const clearInterviewTranscript = () => {
+    if (typeof window === "undefined") return;
+    localStorage.removeItem(INTERVIEW_TRANSCRIPT_KEY);
   };
 
   useEffect(() => {
@@ -314,10 +336,12 @@ export default function DashboardPage() {
   async function startInterview() {
     const allowed = await requestVoicePermission();
     setInterviewStarted(true);
+    setInterview(null);
     setInterviewMessage("");
     setInterviewCode("");
     lastTranscriptRef.current = "";
     setInterviewHistory([]);
+    clearInterviewTranscript();
     setQuestionNumber(1);
     await sendInterviewMessage({
       starterMessage: "Start the interview. Ask the first question.",
@@ -329,12 +353,39 @@ export default function DashboardPage() {
 
   async function endInterview() {
     stopListening();
-    await sendInterviewMessage({
-      starterMessage: interviewMessage.trim() || "End the interview and give final feedback.",
-      nextQuestionNumber: questionCount,
-      nextHistory: interviewHistory,
-      shouldSpeak: true,
-    });
+    await requestFinalInterviewReport();
+  }
+
+  async function requestFinalInterviewReport(transcriptOverride) {
+    const transcript = transcriptOverride || readInterviewTranscript();
+
+    try {
+      setBusyKey("finalReport", true);
+      setPageError("");
+      const data = await apiFetch("/interview/message", {
+        method: "POST",
+        body: JSON.stringify({
+          targetRole: profile?.targetRole || "Frontend Developer",
+          interviewType,
+          questionCount,
+          isFinalReport: true,
+          transcript,
+        }),
+      });
+
+      setInterview(data);
+      setAgentText(data.feedback || "Final interview report is ready.");
+      showToast("Final interview report ready.");
+      clearInterviewTranscript();
+      const progressData = await apiFetch("/progress");
+      setProgress(progressData);
+      const historyData = await apiFetch("/interview/history");
+      setInterviewScoreHistory(historyData.history || []);
+    } catch (err) {
+      showApiError(err);
+    } finally {
+      setBusyKey("finalReport", false);
+    }
   }
 
   async function sendInterviewMessage({
@@ -355,6 +406,29 @@ export default function DashboardPage() {
       setPageError("");
       const currentQuestionNumber = nextQuestionNumber || questionNumber;
       const currentHistory = nextHistory || interviewHistory;
+      let updatedHistory = currentHistory;
+
+      if (!starterMessage && interview?.reply) {
+        updatedHistory = [
+          ...currentHistory,
+          {
+            questionNumber: currentQuestionNumber,
+            question: interview.reply,
+            answer,
+            code: interviewType === "technical" ? interviewCode : "",
+          },
+        ];
+        saveInterviewTranscript(updatedHistory);
+      }
+
+      if (!starterMessage && currentQuestionNumber >= questionCount) {
+        setInterviewMessage("");
+        setInterviewCode("");
+        lastTranscriptRef.current = "";
+        await requestFinalInterviewReport(updatedHistory);
+        return;
+      }
+
       const data = await apiFetch("/interview/message", {
         method: "POST",
         body: JSON.stringify({
@@ -364,18 +438,9 @@ export default function DashboardPage() {
           questionNumber: currentQuestionNumber,
           message: answer,
           code: interviewType === "technical" ? interviewCode : "",
-          history: currentHistory,
+          history: updatedHistory,
         }),
       });
-      const updatedHistory = [
-        ...currentHistory,
-        {
-          questionNumber: currentQuestionNumber,
-          answer,
-          code: interviewType === "technical" ? interviewCode : "",
-          ai: data,
-        },
-      ];
       setInterview(data);
       setAgentText(data.feedback);
       setInterviewHistory(updatedHistory);
@@ -384,11 +449,7 @@ export default function DashboardPage() {
       setInterviewCode("");
       lastTranscriptRef.current = "";
       if (shouldSpeak) speakText(data.reply);
-      showToast("Interview feedback ready.");
-      const progressData = await apiFetch("/progress");
-      setProgress(progressData);
-      const historyData = await apiFetch("/interview/history");
-      setInterviewScoreHistory(historyData.history || []);
+      showToast("Next interview question ready.");
     } catch (err) {
       showApiError(err);
     } finally {
@@ -675,8 +736,10 @@ export default function DashboardPage() {
                 <>
                   {interview && (
                     <div className="activity-list">
-                      <div className="act-row"><div className="act-time">Question</div><div className="act-text">{interview.reply}</div></div>
-                      {interview.score > 0 && (
+                      {!interview.isComplete && (
+                        <div className="act-row"><div className="act-time">Question</div><div className="act-text">{interview.reply}</div></div>
+                      )}
+                      {!interview.isComplete && interview.score > 0 && (
                         <>
                           <div className="act-row"><div className="act-time">Feedback</div><div className="act-text">{interview.feedback}</div></div>
                           <div className="act-row"><div className="act-time">Score</div><div className="act-text">{interview.score}/10 · {interview.improvementTip}</div></div>
@@ -684,7 +747,15 @@ export default function DashboardPage() {
                       )}
                     </div>
                   )}
-                  {!interview?.isComplete && (
+                  {busy.finalReport && (
+                    <div className="activity-list">
+                      <div className="act-row">
+                        <div className="act-time">Report</div>
+                        <div className="act-text">Final report loading...</div>
+                      </div>
+                    </div>
+                  )}
+                  {!interview?.isComplete && !busy.finalReport && (
                     <>
                       <div className="scan-input">
                         <textarea
@@ -713,11 +784,11 @@ export default function DashboardPage() {
                           />
                         </div>
                       )}
-                      <button className="btn btn-primary" onClick={() => sendInterviewMessage()} disabled={busy.interview}>
+                      <button className="btn btn-primary" onClick={() => sendInterviewMessage()} disabled={busy.interview || busy.finalReport}>
                         {busy.interview ? "Submitting..." : "Submit Answer"}
                       </button>
-                      <button className="btn btn-ghost" onClick={endInterview} style={{ marginLeft: 8 }} disabled={busy.interview}>
-                        {busy.interview ? "Ending..." : "End Interview"}
+                      <button className="btn btn-ghost" onClick={endInterview} style={{ marginLeft: 8 }} disabled={busy.interview || busy.finalReport}>
+                        {busy.finalReport ? "Preparing report..." : "End Interview"}
                       </button>
                     </>
                   )}

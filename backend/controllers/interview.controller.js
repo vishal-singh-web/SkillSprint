@@ -10,6 +10,8 @@ const sendInterviewMessage = async (req, res, next) => {
       code,
       questionNumber,
       history,
+      transcript,
+      isFinalReport,
     } = req.body;
 
     if (!targetRole || typeof targetRole !== "string") {
@@ -33,7 +35,7 @@ const sendInterviewMessage = async (req, res, next) => {
       });
     }
 
-    if (!message || typeof message !== "string") {
+    if (!isFinalReport && (!message || typeof message !== "string")) {
       return res.status(400).json({
         success: false,
         message: "message is required and must be a string",
@@ -49,6 +51,8 @@ const sendInterviewMessage = async (req, res, next) => {
       code,
       questionNumber,
       history,
+      transcript,
+      isFinalReport,
     });
 
     return res.status(200).json(result);

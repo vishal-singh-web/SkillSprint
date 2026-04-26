@@ -21,60 +21,12 @@ const validateInterviewResponse = (aiResult) => {
   }
 };
 
-const hasUsefulAnswer = (message = "", code = "") => {
-  const combined = `${message || ""} ${code || ""}`
-    .replace(/end the interview/gi, "")
-    .trim();
+const hasUsefulTranscript = (transcript = []) => {
+  const answerText = (transcript || [])
+    .map((item) => `${item.answer || ""} ${item.code || ""}`.trim())
+    .join(" ");
 
-  return combined.split(/\s+/).filter(Boolean).length >= 8;
-};
-
-const normalizeFinalResult = ({ aiResult, message, code }) => {
-  const usefulAnswer = hasUsefulAnswer(message, code);
-
-  if (!aiResult.isComplete) {
-    if (usefulAnswer) {
-      return aiResult;
-    }
-
-    return {
-      ...aiResult,
-      score: Math.min(2, Math.max(0, Math.round(aiResult.score || 0))),
-      feedback: "The answer had too little detail to evaluate strongly.",
-      improvementTip:
-        "Give a concrete example with context, actions you took, and the result.",
-    };
-  }
-
-  const finalScore = usefulAnswer
-    ? Math.max(0, Math.min(10, Math.round(aiResult.finalScore || aiResult.score || 0)))
-    : 0;
-
-  return {
-    ...aiResult,
-    score: usefulAnswer ? Math.max(0, Math.min(10, Math.round(aiResult.score || 0))) : 0,
-    finalScore,
-    overallGood:
-      aiResult.overallGood?.length > 0
-        ? aiResult.overallGood
-        : usefulAnswer
-          ? ["You attempted the interview and stayed in the flow."]
-          : ["You started the interview session."],
-    overallImprove:
-      aiResult.overallImprove?.length > 0
-        ? aiResult.overallImprove
-        : [
-            "Answer with a clear example, your exact role, the tech used, and the result.",
-          ],
-    feedback:
-      aiResult.feedback ||
-      (usefulAnswer
-        ? "Good attempt. Add more depth and structure."
-        : "No meaningful answer was provided, so the final score is zero."),
-    improvementTip:
-      aiResult.improvementTip ||
-      "Use STAR for HR answers and problem-approach-result for technical answers.",
-  };
+  return answerText.split(/\s+/).filter(Boolean).length >= 12;
 };
 
 const incrementInterviewProgress = async (userId) => {
@@ -104,6 +56,127 @@ const incrementInterviewProgress = async (userId) => {
   }
 };
 
+const saveFinalInterview = async ({
+  userId,
+  targetRole,
+  interviewType,
+  questionCount,
+  result,
+}) => {
+  const { error } = await supabase.from("interview_messages").insert({
+    user_id: userId,
+    target_role: targetRole,
+    user_message: JSON.stringify({
+      interviewType,
+      questionCount,
+      completed: true,
+    }),
+    ai_reply: "",
+    feedback: [
+      ...(result.overallGood || []).map((item) => `Good: ${item}`),
+      ...(result.overallImprove || []).map((item) => `Improve: ${item}`),
+    ].join(" | "),
+    score: result.finalScore,
+    improvement_tip: result.improvementTip,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  await incrementInterviewProgress(userId);
+};
+
+const generateFinalReport = async ({
+  userId,
+  targetRole,
+  interviewType,
+  questionCount,
+  transcript = [],
+}) => {
+  if (!hasUsefulTranscript(transcript)) {
+    const result = {
+      reply: "",
+      feedback:
+        "No meaningful answers were provided, so the interview cannot be scored positively.",
+      score: 0,
+      improvementTip:
+        "Answer each question with a specific example, your actions, the tech or decision involved, and the result.",
+      questionNumber: questionCount,
+      isComplete: true,
+      overallGood: ["You started the interview practice."],
+      overallImprove: [
+        "Provide complete answers before ending the interview.",
+        "Use concrete examples instead of short or empty replies.",
+      ],
+      finalScore: 0,
+    };
+
+    await saveFinalInterview({
+      userId,
+      targetRole,
+      interviewType,
+      questionCount,
+      result,
+    });
+    return result;
+  }
+
+  const prompt = `
+Act as a brutally honest placement mock-interview evaluator.
+Grade ONLY the interview transcript below. Do not give credit for profile, resume, project history, or skills unless the candidate clearly said them in the answers.
+If an answer is vague, short, missing details, or avoids the question, penalize heavily.
+
+Interview mode: ${interviewType === "hr" ? "HR Interview" : "Technical Interview"}
+Target role: ${targetRole}
+Expected question count: ${questionCount}
+Transcript: ${JSON.stringify(transcript)}
+
+Return this exact JSON shape:
+{
+  "reply": "",
+  "feedback": "",
+  "score": 0,
+  "improvementTip": "",
+  "questionNumber": ${questionCount},
+  "isComplete": true,
+  "overallGood": ["specific thing actually shown in answers"],
+  "overallImprove": ["specific improvement from weak or missing answers"],
+  "finalScore": 0
+}
+`;
+
+  const result = await generateJSONPrompt(prompt);
+  validateInterviewResponse(result);
+
+  const normalized = {
+    ...result,
+    reply: "",
+    isComplete: true,
+    questionNumber: questionCount,
+    finalScore: Math.max(0, Math.min(10, Math.round(result.finalScore))),
+    score: 0,
+    overallGood:
+      result.overallGood.length > 0
+        ? result.overallGood
+        : ["You completed the interview attempt."],
+    overallImprove:
+      result.overallImprove.length > 0
+        ? result.overallImprove
+        : ["Add stronger examples, clearer structure, and more technical depth."],
+  };
+
+  await saveFinalInterview({
+    userId,
+    targetRole,
+    interviewType,
+    questionCount,
+    result: normalized,
+  });
+
+  return normalized;
+};
+
 const generateInterviewReply = async ({
   userId,
   targetRole,
@@ -113,53 +186,54 @@ const generateInterviewReply = async ({
   code,
   questionNumber = 0,
   history = [],
+  transcript = [],
+  isFinalReport = false,
 }) => {
-  const [{ data: profile }, { data: progress }, { data: latestSkillGap }] =
-    await Promise.all([
-      supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
-      supabase
-        .from("progress")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle(),
-      supabase
-        .from("skill_gap_reports")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-    ]);
+  if (isFinalReport) {
+    return generateFinalReport({
+      userId,
+      targetRole,
+      interviewType,
+      questionCount,
+      transcript,
+    });
+  }
+
+  const [{ data: profile }, { data: latestSkillGap }] = await Promise.all([
+    supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+    supabase
+      .from("skill_gap_reports")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
   const prompt = `
 Act as a realistic mock interviewer.
 Interview mode: ${interviewType === "hr" ? "HR Interview" : "Technical Interview"}.
 Total questions requested: ${questionCount}.
-Current answered question number: ${questionNumber}.
+Next question number to ask: ${questionNumber === 0 ? 1 : questionNumber + 1}.
 
-Ask exactly one question at a time.
-If current answered question number is 0, start the interview by asking question 1. Do not score yet; return score 0, feedback "Answer this question to get feedback.", and improvementTip "Feedback appears after your answer."
-If current answered question number is less than total questions requested, give feedback for the answer, then ask the next question.
-If current answered question number is equal to total questions requested, this is the final answer. Do not ask another question. Give final short feedback, non-empty overallGood, non-empty overallImprove, finalScore, and set isComplete true.
-If the candidate answer is empty, filler, or has no useful detail, score it 0 to 2 only. If this is the final answer and there is no useful detail, finalScore must be 0.
+Ask exactly one question. Do not score or evaluate the candidate yet.
+Use the previous answers only to ask a relevant follow-up.
 For HR interviews, focus on communication, behavior, projects, internships, strengths, weaknesses, teamwork, conflict, motivation, and role fit.
-For technical interviews, focus on role-specific fundamentals, project architecture, debugging, APIs, database, frontend/backend concepts, DSA, and code reasoning. If code is provided, review it briefly and ask one follow-up.
-Do not be generic.
+For technical interviews, focus on role-specific fundamentals, project architecture, debugging, APIs, database, frontend/backend concepts, DSA, and code reasoning. If code is provided, ask a code-related follow-up.
 
 Target role: ${targetRole}
-Profile: ${JSON.stringify(profile)}
-Progress: ${JSON.stringify(progress)}
-Latest skill gap: ${JSON.stringify(latestSkillGap)}
-Interview history: ${JSON.stringify(history)}
-Candidate answer: ${message}
+Profile skills for question personalization only: ${JSON.stringify(profile?.skills || [])}
+Latest skill gap for question personalization only: ${JSON.stringify(latestSkillGap)}
+Previous Q&A transcript: ${JSON.stringify(history)}
+Candidate latest answer: ${message || ""}
 Optional code submitted by candidate: ${code || ""}
 
 Return this exact JSON shape:
 {
   "reply": "",
-  "feedback": "",
-  "score": 7,
-  "improvementTip": "",
+  "feedback": "Answer this question to get feedback.",
+  "score": 0,
+  "improvementTip": "Feedback appears after the interview ends.",
   "questionNumber": ${questionNumber === 0 ? 1 : questionNumber + 1},
   "isComplete": false,
   "overallGood": [],
@@ -168,36 +242,19 @@ Return this exact JSON shape:
 }
 `;
 
-  const rawAiResult = await generateJSONPrompt(prompt);
-  validateInterviewResponse(rawAiResult);
-  const aiResult = normalizeFinalResult({ aiResult: rawAiResult, message, code });
+  const result = await generateJSONPrompt(prompt);
+  validateInterviewResponse(result);
 
-  if (aiResult.isComplete) {
-    const { error } = await supabase.from("interview_messages").insert({
-      user_id: userId,
-      target_role: targetRole,
-      user_message: JSON.stringify({
-        interviewType,
-        questionCount,
-        completed: true,
-      }),
-      ai_reply: aiResult.reply,
-      feedback: [
-        ...(aiResult.overallGood || []).map((item) => `Good: ${item}`),
-        ...(aiResult.overallImprove || []).map((item) => `Improve: ${item}`),
-      ].join(" | "),
-      score: aiResult.finalScore,
-      improvement_tip: aiResult.improvementTip,
-    });
-
-    if (error) {
-      throw error;
-    }
-
-    await incrementInterviewProgress(userId);
-  }
-
-  return aiResult;
+  return {
+    ...result,
+    feedback: "Answer this question to get feedback.",
+    score: 0,
+    improvementTip: "Feedback appears after the interview ends.",
+    isComplete: false,
+    overallGood: [],
+    overallImprove: [],
+    finalScore: 0,
+  };
 };
 
 const getInterviewHistory = async (userId) => {
