@@ -21,6 +21,8 @@ export default function DashboardPage() {
   const [progress, setProgress] = useState(emptyProgress);
   const [tasks, setTasks] = useState([]);
   const [skillGap, setSkillGap] = useState(null);
+  const [skillGapHistory, setSkillGapHistory] = useState([]);
+  const [openSkillGapId, setOpenSkillGapId] = useState(null);
   const [moodHistory, setMoodHistory] = useState([]);
   const [todayMood, setTodayMood] = useState(null);
   const [interview, setInterview] = useState(null);
@@ -41,8 +43,31 @@ export default function DashboardPage() {
   const [interviewCode, setInterviewCode] = useState("");
   const [agentText, setAgentText] = useState("SkillSprint is ready. Ask what to improve, your best skill, or what you are lacking.");
   const [agentQuestion, setAgentQuestion] = useState("");
+  const [showAllSkills, setShowAllSkills] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState({});
+  const [pageError, setPageError] = useState("");
   const recognitionRef = useRef(null);
+  const voiceShouldContinueRef = useRef(false);
+  const lastTranscriptRef = useRef("");
+
+  const setBusyKey = (key, value) => {
+    setBusy((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const showApiError = (err) => {
+    const message = err.message || "Something went wrong. Please try again.";
+    setPageError(message);
+    showToast(message);
+  };
+
+  const formatShortDate = (value) => {
+    if (!value) return "";
+    return new Date(value).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+    });
+  };
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -57,6 +82,8 @@ export default function DashboardPage() {
   async function loadDashboard() {
     try {
       setLoading(true);
+      setBusyKey("dashboard", true);
+      setPageError("");
       const [profileRes, progressRes, tasksRes, moodRes] = await Promise.all([
         apiFetch("/profile"),
         apiFetch("/progress"),
@@ -69,13 +96,13 @@ export default function DashboardPage() {
       setTasks(tasksRes.daily3 || []);
       setMoodHistory(moodRes.moodHistory || []);
       setTodayMood(moodRes.todayMood || null);
-      apiFetch("/interview/history")
-        .then((data) => setInterviewScoreHistory(data.history || []))
-        .catch(() => {});
+      apiFetch("/interview/history").then((data) => setInterviewScoreHistory(data.history || [])).catch(() => {});
+      apiFetch("/skill-gap/history").then((data) => setSkillGapHistory(data.history || [])).catch(() => {});
     } catch (err) {
-      showToast(err.message);
+      showApiError(err);
     } finally {
       setLoading(false);
+      setBusyKey("dashboard", false);
     }
   }
 
@@ -104,7 +131,8 @@ export default function DashboardPage() {
 
   async function generateTasks() {
     try {
-      setLoading(true);
+      setBusyKey("generateTasks", true);
+      setPageError("");
       const data = await apiFetch("/daily-tasks/generate", {
         method: "POST",
         body: JSON.stringify({
@@ -115,14 +143,16 @@ export default function DashboardPage() {
       setAgentText("Today's Daily 3 was regenerated using your role, skills, progress, and recent mood.");
       showToast("Today's SkillSprint tasks generated.");
     } catch (err) {
-      showToast(err.message);
+      showApiError(err);
     } finally {
-      setLoading(false);
+      setBusyKey("generateTasks", false);
     }
   }
 
   async function completeTask(taskId) {
     try {
+      setBusyKey(`task-${taskId}`, true);
+      setPageError("");
       const data = await apiFetch(`/daily-tasks/${taskId}/complete`, {
         method: "PATCH",
       });
@@ -133,12 +163,16 @@ export default function DashboardPage() {
       setAgentText("Nice. That task is complete and your progress has been updated.");
       showToast("Task marked complete.");
     } catch (err) {
-      showToast(err.message);
+      showApiError(err);
+    } finally {
+      setBusyKey(`task-${taskId}`, false);
     }
   }
 
   async function pickMood(mood) {
     try {
+      setBusyKey("mood", true);
+      setPageError("");
       const data = await apiFetch("/mood", {
         method: "POST",
         body: JSON.stringify({ mood }),
@@ -148,7 +182,9 @@ export default function DashboardPage() {
       setAgentText("Mood saved for today. If you change it, the same DB row will be updated.");
       showToast("Mood saved.");
     } catch (err) {
-      showToast(err.message);
+      showApiError(err);
+    } finally {
+      setBusyKey("mood", false);
     }
   }
 
@@ -169,7 +205,8 @@ export default function DashboardPage() {
     }
 
     try {
-      setLoading(true);
+      setBusyKey("skillGap", true);
+      setPageError("");
       const data = await apiFetch("/skill-gap", {
         method: "POST",
         body: JSON.stringify({
@@ -185,12 +222,14 @@ export default function DashboardPage() {
       });
       setSkillGap(data);
       setProfile((prev) => ({ ...prev, skills: data.updatedSkills || prev?.skills || [] }));
+      const historyData = await apiFetch("/skill-gap/history");
+      setSkillGapHistory(historyData.history || []);
       setAgentText(data.message || "Skills updated. Your next generated Daily 3 will use this analysis.");
       showToast("Skill analysis saved.");
     } catch (err) {
-      showToast(err.message);
+      showApiError(err);
     } finally {
-      setLoading(false);
+      setBusyKey("skillGap", false);
     }
   }
 
@@ -205,6 +244,7 @@ export default function DashboardPage() {
 
   async function requestVoicePermission() {
     try {
+      setBusyKey("voicePermission", true);
       await navigator.mediaDevices.getUserMedia({ audio: true });
       setVoiceAllowed(true);
       showToast("Microphone enabled.");
@@ -213,6 +253,8 @@ export default function DashboardPage() {
       setVoiceAllowed(false);
       showToast("Microphone denied. You can type your answer.");
       return false;
+    } finally {
+      setBusyKey("voicePermission", false);
     }
   }
 
@@ -228,26 +270,44 @@ export default function DashboardPage() {
     const allowed = voiceAllowed || (await requestVoicePermission());
     if (!allowed) return;
 
+    if (isListening || recognitionRef.current) return;
+
     const recognition = new SpeechRecognition();
     recognition.lang = "en-IN";
     recognition.interimResults = false;
     recognition.continuous = true;
     recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
+    recognition.onend = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+      if (voiceShouldContinueRef.current) {
+        window.setTimeout(() => startListening(), 250);
+      }
+    };
     recognition.onerror = () => {
       setIsListening(false);
+      recognitionRef.current = null;
       showToast("Voice input stopped. You can type instead.");
     };
     recognition.onresult = (event) => {
-      const transcript = event.results?.[0]?.[0]?.transcript || "";
+      const result = event.results?.[event.resultIndex];
+      if (!result?.isFinal) return;
+
+      const transcript = result?.[0]?.transcript?.trim() || "";
+      if (!transcript || transcript === lastTranscriptRef.current) return;
+
+      lastTranscriptRef.current = transcript;
       setInterviewMessage((prev) => `${prev}${prev ? " " : ""}${transcript}`);
     };
     recognitionRef.current = recognition;
+    voiceShouldContinueRef.current = true;
     recognition.start();
   }
 
   function stopListening() {
+    voiceShouldContinueRef.current = false;
     recognitionRef.current?.stop();
+    recognitionRef.current = null;
     setIsListening(false);
   }
 
@@ -256,6 +316,7 @@ export default function DashboardPage() {
     setInterviewStarted(true);
     setInterviewMessage("");
     setInterviewCode("");
+    lastTranscriptRef.current = "";
     setInterviewHistory([]);
     setQuestionNumber(1);
     await sendInterviewMessage({
@@ -290,7 +351,8 @@ export default function DashboardPage() {
     }
 
     try {
-      setLoading(true);
+      setBusyKey("interview", true);
+      setPageError("");
       const currentQuestionNumber = nextQuestionNumber || questionNumber;
       const currentHistory = nextHistory || interviewHistory;
       const data = await apiFetch("/interview/message", {
@@ -320,6 +382,7 @@ export default function DashboardPage() {
       setQuestionNumber(data.questionNumber || currentQuestionNumber + 1);
       setInterviewMessage("");
       setInterviewCode("");
+      lastTranscriptRef.current = "";
       if (shouldSpeak) speakText(data.reply);
       showToast("Interview feedback ready.");
       const progressData = await apiFetch("/progress");
@@ -327,9 +390,9 @@ export default function DashboardPage() {
       const historyData = await apiFetch("/interview/history");
       setInterviewScoreHistory(historyData.history || []);
     } catch (err) {
-      showToast(err.message);
+      showApiError(err);
     } finally {
-      setLoading(false);
+      setBusyKey("interview", false);
     }
   }
 
@@ -337,6 +400,8 @@ export default function DashboardPage() {
     if (!agentQuestion.trim()) return;
 
     try {
+      setBusyKey("agent", true);
+      setPageError("");
       const data = await apiFetch("/agent/message", {
         method: "POST",
         body: JSON.stringify({ question: agentQuestion }),
@@ -344,7 +409,9 @@ export default function DashboardPage() {
       setAgentText(data.reply);
       setAgentQuestion("");
     } catch (err) {
-      showToast(err.message);
+      showApiError(err);
+    } finally {
+      setBusyKey("agent", false);
     }
   }
 
@@ -414,6 +481,7 @@ export default function DashboardPage() {
         </aside>
 
         <main className="dash-main">
+          {pageError && <div className="error-msg show">{pageError}</div>}
           <div className="dash-h">
             <div>
               <h1>{greeting}</h1>
@@ -421,20 +489,26 @@ export default function DashboardPage() {
             </div>
 
             <div className="dash-top-actions">
-              <div className="mood-toggle" aria-label="Mood selector">
+              <div className={"mood-card-slide" + (activeNav === "today" ? " in" : " out")}>
+                {!todayMood && <div className="mood-helper">Select your mood for today.</div>}
+                <div className="mood-toggle" aria-label="Mood selector">
                 {["low", "neutral", "high"].map((mood) => (
                   <button
                     key={mood}
                     className={todayMood === mood ? "active" : ""}
                     onClick={() => pickMood(mood)}
+                    disabled={busy.mood}
                   >
-                    {mood.charAt(0).toUpperCase() + mood.slice(1)}
+                    {busy.mood && todayMood === mood ? "Saving..." : mood.charAt(0).toUpperCase() + mood.slice(1)}
                   </button>
                 ))}
+                </div>
               </div>
-              <button className="btn btn-primary" onClick={generateTasks} disabled={loading}>
-                {loading ? "Working..." : "Generate Daily 3"}
-              </button>
+              {activeNav === "today" && (
+                <button className="btn btn-primary" onClick={generateTasks} disabled={busy.generateTasks}>
+                  {busy.generateTasks ? "Generating..." : "Generate Daily 3"}
+                </button>
+              )}
             </div>
           </div>
 
@@ -445,16 +519,19 @@ export default function DashboardPage() {
                 Generated from your role, progress, completed tasks, latest skill gaps, and mood history.
               </p>
               <div>
-                {tasks.length === 0 && <p className="desc">No tasks yet. Click Generate Daily 3.</p>}
+                {busy.dashboard && <p className="desc">Loading today&apos;s tasks...</p>}
+                {!busy.dashboard && tasks.length === 0 && <p className="desc">No tasks yet. Click Generate Daily 3.</p>}
                 {tasks.map((task) => (
                   <div key={task.id} className="task-row" onClick={() => !task.completed && completeTask(task.id)}>
                     <div className={"task-check" + (task.completed ? " done" : "")} />
                     <div className="task-info">
                       <div className="task-cat">{task.category}</div>
                       <div className={"task-title" + (task.completed ? " done" : "")}>{task.title}</div>
-                      <div className="task-sub">{task.description || task.reason} · {task.estimatedTime}</div>
+                    <div className="task-sub">
+                      {busy[`task-${task.id}`] ? "Updating..." : `${task.description || task.reason} · ${task.estimatedTime}`}
                     </div>
                   </div>
+                </div>
                 ))}
               </div>
             </section>
@@ -491,7 +568,7 @@ export default function DashboardPage() {
                 {scannerMode === "github" && (
                   <input
                     type="text"
-                    placeholder="https://github.com/vishal-singh-web/Varta"
+                    placeholder="https://github.com/username/reponame"
                     value={repoUrl}
                     onChange={(e) => setRepoUrl(e.target.value)}
                   />
@@ -504,7 +581,9 @@ export default function DashboardPage() {
                     onChange={(e) => setManualSkills(e.target.value)}
                   />
                 )}
-                <button className="btn btn-primary" onClick={runSkillGap}>Analyze</button>
+                <button className="btn btn-primary" onClick={runSkillGap} disabled={busy.skillGap}>
+                  {busy.skillGap ? "Analyzing..." : "Analyze"}
+                </button>
               </div>
               {skillGap && (
                 <div className="activity-list">
@@ -514,6 +593,40 @@ export default function DashboardPage() {
                   <div className="act-row"><div className="act-time">Roadmap</div><div className="act-text">{skillGap.recommendedRoadmap?.join(" · ")}</div></div>
                   <div className="act-row"><div className="act-time">Next</div><div className="act-text">{skillGap.message}</div></div>
                 </div>
+              )}
+              {skillGapHistory.length > 0 && (
+                <>
+                  <h3 style={{ marginTop: 24 }}>Scan History</h3>
+                  <div className="activity-list">
+                    {skillGapHistory.map((scan) => (
+                      <div className="act-row" key={scan.id}>
+                        <div className="act-time">{new Date(scan.createdAt).toLocaleDateString()}</div>
+                        <div className="act-text">
+                          <strong>{scan.targetRole}</strong>
+                          <br />
+                          Strengths: {scan.strengths.slice(0, 3).join(", ") || "None"}
+                          <br />
+                          Missing: {scan.missingSkills.slice(0, 3).join(", ") || "None"}
+                          <br />
+                          <button
+                            className="btn btn-ghost"
+                            style={{ marginTop: 8 }}
+                            onClick={() => setOpenSkillGapId(openSkillGapId === scan.id ? null : scan.id)}
+                          >
+                            {openSkillGapId === scan.id ? "Hide details" : "View details"}
+                          </button>
+                          {openSkillGapId === scan.id && (
+                            <div style={{ marginTop: 10 }}>
+                              Projects: {scan.projectSuggestions.join(" · ")}
+                              <br />
+                              Roadmap: {scan.recommendedRoadmap.join(" · ")}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </section>
           )}
@@ -554,7 +667,7 @@ export default function DashboardPage() {
                     ))}
                   </div>
                   <button className="btn btn-primary btn-block" onClick={startInterview}>
-                    Start Interview
+                    {busy.interview || busy.voicePermission ? "Starting..." : "Start Interview"}
                   </button>
                 </>
               )}
@@ -580,7 +693,7 @@ export default function DashboardPage() {
                           value={interviewMessage}
                           onChange={(e) => setInterviewMessage(e.target.value)}
                         />
-                        <button className="btn btn-ghost" onClick={startListening}>
+                        <button className="btn btn-ghost" onClick={startListening} disabled={busy.voicePermission}>
                           {isListening ? "Listening..." : "Voice"}
                         </button>
                         {isListening && (
@@ -600,19 +713,19 @@ export default function DashboardPage() {
                           />
                         </div>
                       )}
-                      <button className="btn btn-primary" onClick={() => sendInterviewMessage()}>
-                        Submit Answer
+                      <button className="btn btn-primary" onClick={() => sendInterviewMessage()} disabled={busy.interview}>
+                        {busy.interview ? "Submitting..." : "Submit Answer"}
                       </button>
-                      <button className="btn btn-ghost" onClick={endInterview} style={{ marginLeft: 8 }}>
-                        End Interview
+                      <button className="btn btn-ghost" onClick={endInterview} style={{ marginLeft: 8 }} disabled={busy.interview}>
+                        {busy.interview ? "Ending..." : "End Interview"}
                       </button>
                     </>
                   )}
                   {interview?.isComplete && (
                     <>
                       <div className="activity-list">
-                        <div className="act-row"><div className="act-time">Good</div><div className="act-text">{interview.overallGood?.join(" · ")}</div></div>
-                        <div className="act-row"><div className="act-time">Improve</div><div className="act-text">{interview.overallImprove?.join(" · ")}</div></div>
+                        <div className="act-row"><div className="act-time">Good</div><div className="act-text">{interview.overallGood?.join(" · ") || "Completed the interview attempt."}</div></div>
+                        <div className="act-row"><div className="act-time">Improve</div><div className="act-text">{interview.overallImprove?.join(" · ") || "Add clearer examples, technical detail, and stronger structure."}</div></div>
                         <div className="act-row"><div className="act-time">Final</div><div className="act-text">{interview.finalScore}/10</div></div>
                       </div>
                       <button className="btn btn-primary" onClick={() => setInterviewStarted(false)}>
@@ -653,37 +766,50 @@ export default function DashboardPage() {
                   <div className="score-bar-fill" style={{ width: `${progress.readinessScore || 0}%` }} />
                 </div>
               </div>
-              <div className="port-stats">
+              <div className="port-stats progress-stats">
                 <div className="port-stat"><div className="v">{progress.streak}</div><div className="l">Streak</div></div>
                 <div className="port-stat"><div className="v">{progress.tasksCompleted}</div><div className="l">Tasks done</div></div>
                 <div className="port-stat"><div className="v">{progress.interviewsCompleted}</div><div className="l">Interviews</div></div>
                 <div className="port-stat"><div className="v">{progress.completionRate}%</div><div className="l">Completion</div></div>
               </div>
+              {moodHistory.length > 0 && (
+                <>
+                  <h3 style={{ marginTop: 24 }}>Mood History</h3>
+                  <div className="mood-graph mood-graph-dated">
+                    {moodHistory.slice(0, 7).reverse().map((entry) => {
+                      const height = { high: 85, neutral: 60, low: 28 }[entry.mood] || 50;
+                      const cls = entry.mood === "low" ? "bad" : entry.mood === "neutral" ? "warn" : "";
+                      return (
+                        <div className="mood-point" key={entry.id}>
+                          <div
+                            className={`mood-bar ${cls}`}
+                            style={{ height: `${height}%` }}
+                            title={`${entry.mood} · ${new Date(entry.createdAt).toLocaleDateString()}`}
+                          />
+                          <div className="mood-date">{formatShortDate(entry.createdAt)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+              {moodHistory.length === 0 && (
+                <>
+                  <h3 style={{ marginTop: 24 }}>Mood History</h3>
+                  <p className="desc">No mood history yet. Select your mood today to begin.</p>
+                </>
+              )}
               <h3 style={{ marginTop: 24 }}>Skills</h3>
-              <div className="skill-chip-row">
+              <div className={"skill-chip-row" + (showAllSkills ? "" : " collapsed")}>
                 {(profile?.skills || []).length === 0 && <p className="desc">No skills saved yet. Run the Skill-Gap Scanner.</p>}
                 {(profile?.skills || []).map((skill) => (
                   <span className="skill-chip" key={skill}>{skill}</span>
                 ))}
               </div>
-              {moodHistory.length > 0 && (
-                <>
-                  <h3 style={{ marginTop: 24 }}>Mood History</h3>
-                  <div className="mood-graph">
-                    {moodHistory.slice(0, 7).reverse().map((entry) => {
-                      const height = { high: 85, neutral: 60, low: 28 }[entry.mood] || 50;
-                      const cls = entry.mood === "low" ? "bad" : entry.mood === "neutral" ? "warn" : "";
-                      return (
-                        <div
-                          key={entry.id}
-                          className={`mood-bar ${cls}`}
-                          style={{ height: `${height}%` }}
-                          title={`${entry.mood} · ${new Date(entry.createdAt).toLocaleDateString()}`}
-                        />
-                      );
-                    })}
-                  </div>
-                </>
+              {(profile?.skills || []).length > 0 && (
+                <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={() => setShowAllSkills((value) => !value)}>
+                  {showAllSkills ? "Show less" : "Show all skills"}
+                </button>
               )}
             </section>
           )}

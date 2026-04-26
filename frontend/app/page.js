@@ -303,53 +303,6 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-
-        {/* Feature 4 */}
-        <div className="feature reverse">
-          <div className="reveal">
-            <div className="mock">
-              <div className="mock-head">
-                <div className="lights"><span /><span /><span /></div>
-                <span className="title">priyak.dev — live portfolio</span>
-              </div>
-              <div className="mock-body">
-                <div className="port-head">
-                  <div>
-                    <div className="port-name">Priya Krishnan</div>
-                    <div className="port-handle">@priyak · CSE, IIIT Hyderabad · 2026</div>
-                  </div>
-                  <div className="port-live"><span className="dot" />Live</div>
-                </div>
-                <div className="port-stats">
-                  <div className="port-stat"><div className="v">218</div><div className="l">Commits / 30d</div></div>
-                  <div className="port-stat"><div className="v">14</div><div className="l">Hard solved</div></div>
-                  <div className="port-stat"><div className="v">3</div><div className="l">Shipped</div></div>
-                </div>
-                <div className="activity-list">
-                  <div className="act-row"><div className="act-time">2m ago</div><div className="act-text">Pushed <strong>feat: langgraph moderation</strong> to varta-chat</div></div>
-                  <div className="act-row"><div className="act-time">3h ago</div><div className="act-text">Solved <strong>Median of Two Sorted Arrays</strong> · Hard</div></div>
-                  <div className="act-row"><div className="act-time">Yesterday</div><div className="act-text">Deployed <strong>resume-rag.priyak.dev</strong></div></div>
-                  <div className="act-row"><div className="act-time">2d ago</div><div className="act-text">Agent updated impact summary for <strong>nexus-cli</strong></div></div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="feature-text reveal">
-            <div className="eyebrow"><span className="dot" />FEATURE 04 / PROOF OF WORK</div>
-            <h2 className="h-section">A live proof-of-work page your opportunities can&apos;t ignore.</h2>
-            <p className="lead">
-              Every commit, every Hard solved, every shipped feature ticks onto your public
-              Proof-of-Work page in real time. The agent writes the impact summaries so you
-              don&apos;t have to lie about &quot;increased efficiency by 40%.&quot;
-            </p>
-            <ul>
-              <li>Auto-syncs from GitHub · LeetCode · deployed projects</li>
-              <li>Agent-generated, brutally honest project descriptions</li>
-              <li>Your strongest work gets a live link, not a PDF graveyard</li>
-              <li>One DM template — one URL — zero &quot;kindly find attached&quot;</li>
-            </ul>
-          </div>
-        </div>
       </section>
 
       {/* FAQ */}
@@ -364,11 +317,11 @@ export default function HomePage() {
         <div className="faq-list">
           {[
             { q: "Is this just another job tracker with extra steps?", a: "No. Trackers are passive — they wait for you to log things. SkillSprint is agentic — it pings you at 8 AM with three specific tasks, scans your repos for stale tech, and pivots your plan when you're burnt out. You don't manage it. It manages you." },
-            { q: "Do I have to give it my GitHub token?", a: "Read-only access on public repos by default. You can grant private access for deeper scans. Tokens are encrypted, never used outside scans, and you can revoke at any time from your settings page." },
+            { q: "Do I have to give it my GitHub token?", a: "No. You just need to provide the github repo link you want to scan to log your skills." },
             { q: "What if I'm not from a top-tier college?", a: "Especially built for you. The Proof-of-Work portfolio is the whole point — your repo, not your campus, becomes the signal. SkillSprint ranks high-intent roles and surfaces them first." },
             { q: "Will the agent shame me if I miss a day?", a: "No. The streak resets, that's it. The mood tracker exists exactly so a bad day doesn't snowball. If you mark anxious twice in a row, the agent pivots — it doesn't lecture." },
             { q: "Free, paid, freemium, what's the deal?", a: "Free for the entire 2026 batch through placement season. We'll add premium features post-graduation, but the core agent — daily tasks, scanner, mood tracker, portfolio — stays free for students." },
-            { q: "Who's behind this?", a: "A small team of 2024 grads who survived their own placement season and built the tool they wished existed. Backed by a few angels who were sick of seeing burnt-out students." },
+            { q: "Who's behind this?", a: "SkillSprint is built by a small team of passionate developers from HVA who wanted to solve a real problem—turning chaotic placement preparation into a clear, structured journey." },
           ].map((item, i) => (
             <div key={i} className={"faq-item" + (openFaq === i ? " open" : "")}>
               <button className="faq-q" onClick={() => setOpenFaq(openFaq === i ? null : i)}>

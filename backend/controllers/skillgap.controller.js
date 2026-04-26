@@ -53,6 +53,17 @@ const analyzeSkillGap = async (req, res, next) => {
   }
 };
 
+const getSkillGapHistory = async (req, res, next) => {
+  try {
+    const history = await skillGapService.getSkillGapHistory(req.user.id);
+
+    return res.status(200).json({ history });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   analyzeSkillGap,
+  getSkillGapHistory,
 };

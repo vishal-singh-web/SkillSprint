@@ -3,6 +3,14 @@ const { generateJSONPrompt } = require("./gemini.service");
 
 const toDateKey = (value) => new Date(value).toISOString().slice(0, 10);
 
+const getSkillsSignature = (skills = []) => {
+  return (skills || [])
+    .map((skill) => String(skill).trim().toLowerCase())
+    .filter(Boolean)
+    .sort()
+    .join("|");
+};
+
 const calculateStreak = async (userId) => {
   const { data: tasks, error } = await supabase
     .from("daily_tasks")
@@ -36,6 +44,8 @@ Profile: ${JSON.stringify(profile)}
 Progress: ${JSON.stringify(progress)}
 Current continuous streak: ${streak}
 
+Keep readinessReason short. Maximum 24 words.
+
 Return this exact JSON shape:
 {
   "readinessScore": 72,
@@ -54,7 +64,10 @@ Return this exact JSON shape:
     throw error;
   }
 
-  return result;
+  return {
+    readinessScore: Math.max(0, Math.min(100, Math.round(result.readinessScore))),
+    readinessReason: result.readinessReason.split(/\s+/).slice(0, 24).join(" "),
+  };
 };
 
 const getProgress = async (userId) => {
@@ -64,7 +77,39 @@ const getProgress = async (userId) => {
   ]);
 
   const streak = await calculateStreak(userId);
-  const readiness = await calculateReadinessScore({ profile, progress, streak });
+  const skillsSignature = getSkillsSignature(profile?.skills || []);
+  let readiness = {
+    readinessScore: progress?.readiness_score || 0,
+    readinessReason:
+      progress?.readiness_reason || "Generated from your skills and progress",
+  };
+
+  const shouldRefreshReadiness =
+    !progress ||
+    !progress.readiness_score ||
+    progress.readiness_skills_signature !== skillsSignature;
+
+  if (shouldRefreshReadiness) {
+    readiness = await calculateReadinessScore({ profile, progress, streak });
+
+    const { error: readinessSaveError } = await supabase.from("progress").upsert(
+      {
+        user_id: userId,
+        tasks_completed: progress?.tasks_completed || 0,
+        interviews_completed: progress?.interviews_completed || 0,
+        completion_rate: progress?.completion_rate || 0,
+        readiness_score: readiness.readinessScore,
+        readiness_reason: readiness.readinessReason,
+        readiness_skills_signature: skillsSignature,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" }
+    );
+
+    if (readinessSaveError) {
+      throw readinessSaveError;
+    }
+  }
 
   return {
     streak,

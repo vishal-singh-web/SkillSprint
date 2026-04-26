@@ -221,6 +221,30 @@ Return this exact JSON shape:
   };
 };
 
+const getSkillGapHistory = async (userId) => {
+  const { data, error } = await supabase
+    .from("skill_gap_reports")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data || []).map((report) => ({
+    id: report.id,
+    targetRole: report.target_role,
+    strengths: report.strengths || [],
+    missingSkills: report.missing_skills || [],
+    projectSuggestions: report.project_suggestions || [],
+    recommendedRoadmap: report.recommended_roadmap || [],
+    createdAt: report.created_at,
+  }));
+};
+
 module.exports = {
   analyzeResumeText,
+  getSkillGapHistory,
 };

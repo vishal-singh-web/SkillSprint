@@ -62,8 +62,20 @@ create table if not exists public.progress (
   tasks_completed int default 0,
   interviews_completed int default 0,
   completion_rate int default 0,
+  readiness_score int default 0,
+  readiness_reason text default '',
+  readiness_skills_signature text default '',
   updated_at timestamp default now()
 );
+
+alter table public.progress
+add column if not exists readiness_score int default 0;
+
+alter table public.progress
+add column if not exists readiness_reason text default '';
+
+alter table public.progress
+add column if not exists readiness_skills_signature text default '';
 
 alter table public.profiles enable row level security;
 alter table public.skill_gap_reports enable row level security;

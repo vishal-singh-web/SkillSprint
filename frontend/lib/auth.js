@@ -1,5 +1,6 @@
 export const TOKEN_KEY = "skillsprint_token";
 export const PROFILE_KEY = "skillsprint_profile";
+export const TOKEN_EXPIRES_KEY = "skillsprint_token_expires_at";
 
 const isBrowser = () => typeof window !== "undefined";
 
@@ -21,8 +22,20 @@ export function saveAuth({ accessToken, profile, user }) {
   }
 }
 
+export function saveTokenExpiry(expiresAt) {
+  if (!isBrowser() || !expiresAt) return;
+  localStorage.setItem(TOKEN_EXPIRES_KEY, String(expiresAt));
+}
+
 export function getToken() {
   if (!isBrowser()) return null;
+
+  const expiresAt = Number(localStorage.getItem(TOKEN_EXPIRES_KEY));
+  if (expiresAt && Date.now() >= expiresAt * 1000) {
+    clearAuth();
+    return null;
+  }
+
   return localStorage.getItem(TOKEN_KEY);
 }
 
@@ -45,4 +58,5 @@ export function clearAuth() {
   if (!isBrowser()) return;
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(PROFILE_KEY);
+  localStorage.removeItem(TOKEN_EXPIRES_KEY);
 }

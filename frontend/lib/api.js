@@ -1,4 +1,4 @@
-import { clearAuth, getToken, saveAuth } from "./auth";
+import { clearAuth, getToken, saveAuth, saveTokenExpiry } from "./auth";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api";
@@ -15,7 +15,15 @@ export async function apiFetch(endpoint, options = {}) {
     },
   });
 
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
+
+  if (res.status === 401) {
+    clearAuth();
+    if (typeof window !== "undefined") {
+      window.location.replace("/login?expired=1");
+    }
+    throw new Error("Your session expired. Please log in again.");
+  }
 
   if (!res.ok) {
     throw new Error(data.error || data.message || "API request failed");
@@ -40,6 +48,7 @@ export async function signup(payload) {
     },
     user: data.user,
   });
+  saveTokenExpiry(data.session?.expires_at);
 
   return data;
 }
@@ -54,6 +63,7 @@ export async function login(payload) {
     accessToken: data.accessToken,
     user: data.user,
   });
+  saveTokenExpiry(data.session?.expires_at);
 
   return data;
 }

@@ -126,7 +126,7 @@ export default function SignupPage() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-            <button type="submit" className="btn btn-primary btn-lg btn-block">
+            <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
               {loading ? "Creating account..." : "Boot Agent →"}
             </button>
           </form>
