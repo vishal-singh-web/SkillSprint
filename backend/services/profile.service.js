@@ -34,15 +34,23 @@ const upsertProfile = async ({ userId, email, name, targetRole, skills }) => {
     .single();
 
   if (error) {
+    error.statusCode = error.statusCode || 500;
+    error.message = `Profile setup failed: ${error.message}`;
     throw error;
   }
 
-  await supabase.from("progress").upsert(
+  const { error: progressError } = await supabase.from("progress").upsert(
     {
       user_id: userId,
     },
     { onConflict: "user_id" }
   );
+
+  if (progressError) {
+    progressError.statusCode = progressError.statusCode || 500;
+    progressError.message = `Progress setup failed: ${progressError.message}`;
+    throw progressError;
+  }
 
   return mapProfile(data);
 };

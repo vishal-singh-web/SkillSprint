@@ -25,10 +25,24 @@ Create a `.env` file:
 
 ```text
 PORT=5000
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_anon_or_publishable_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 GEMINI_API_KEY=your_api_key_here
 ```
 
-If `GEMINI_API_KEY` is missing or Gemini returns invalid JSON, the backend returns safe fallback demo data.
+The three Supabase variables are required for authentication and database access. If
+`GEMINI_API_KEY` is missing or Gemini returns invalid JSON, the backend returns safe
+fallback demo data.
+
+OpenRouter can use `OPEN_ROUTER_API_KEY1` through `OPEN_ROUTER_API_KEY7`, or the
+standard `OPENROUTER_API_KEY`. If multiple keys are configured, separate them with
+commas in `OPENROUTER_API_KEYS`; failed keys are skipped automatically.
+
+Email confirmation is controlled in Supabase Dashboard > Authentication >
+Providers > Email. Turn off **Confirm email** to allow new users to log in
+immediately after signup. Existing unconfirmed users must be confirmed manually
+or recreated after changing this setting.
 
 ## Run
 

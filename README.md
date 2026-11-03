@@ -214,6 +214,32 @@ SUPABASE_SERVICE_ROLE_KEY=
 GEMINI_API_KEY=
 ```
 
+For a Render deployment, add these same variables under the service's **Environment**
+settings. `SUPABASE_URL` must be the Project URL from Supabase, while
+`SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` must be copied from the
+Supabase API settings. Redeploy after saving the variables.
+
+### Scheduled service checks
+
+The repository includes a GitHub Actions workflow at
+`.github/workflows/keepalive.yml` that checks Render and Supabase every 10 minutes.
+Add these repository secrets under **Settings > Secrets and variables > Actions**:
+
+```text
+RENDER_HEALTH_URL=https://skillsprint-fu5p.onrender.com/health
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your Supabase anon/publishable key
+```
+
+This can reduce cold starts, but it does not override Render or Supabase free-plan
+sleep/pausing policies. A paid or non-pausing plan is required for guaranteed uptime.
+
+To disable email confirmation, open Supabase Dashboard → **Authentication →
+Providers → Email**, turn off **Confirm email**, and save. New signups will then
+be able to log in immediately without a confirmation link. Existing unconfirmed
+users must be confirmed once under **Authentication → Users**, or deleted and
+recreated after disabling the setting.
+
 Run backend:
 
 ```bash

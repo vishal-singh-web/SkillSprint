@@ -21,7 +21,6 @@ export default function LoginPage() {
 
   async function onSubmit(e) {
     e.preventDefault();
-    setError("");
     if (!email.trim() || !password) {
       setError("Both fields are required.");
       return;
@@ -54,7 +53,9 @@ export default function LoginPage() {
           <h1>Welcome back.</h1>
           <p className="sub">SkillSprint has been waiting. Log in and let&apos;s get back to it.</p>
 
-          <div className={"error-msg" + (error ? " show" : "")}>{error}</div>
+          <div className={"error-msg" + (error ? " show" : "")} role="alert" aria-live="polite">
+            {error}
+          </div>
 
           <form onSubmit={onSubmit} autoComplete="on">
             <div className="field">
@@ -65,7 +66,10 @@ export default function LoginPage() {
                 required
                 placeholder="you@college.edu"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError("");
+                }}
               />
             </div>
             <div className="field">
@@ -76,7 +80,10 @@ export default function LoginPage() {
                 required
                 placeholder="••••••••"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError("");
+                }}
               />
             </div>
             <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>

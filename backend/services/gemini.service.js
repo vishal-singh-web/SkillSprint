@@ -2,8 +2,10 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 const cleanAIText = (text) => {
   return String(text || "")
+    .replace(/^\uFEFF/, "")
     .replace(/```json/gi, "")
     .replace(/```/g, "")
+    .replace(/<json>|<\/json>/gi, "")
     .trim();
 };
 
@@ -25,43 +27,51 @@ const normalizeContent = (content) => {
 };
 
 const extractBalancedJSON = (text) => {
-  const start = text.search(/[\[{]/);
-  if (start === -1) return null;
+  for (let start = 0; start < text.length; start += 1) {
+    if (text[start] !== "{" && text[start] !== "[") continue;
 
-  const stack = [];
-  let inString = false;
-  let escaped = false;
+    const stack = [];
+    let inString = false;
+    let escaped = false;
 
-  for (let index = start; index < text.length; index += 1) {
-    const char = text[index];
+    for (let index = start; index < text.length; index += 1) {
+      const char = text[index];
 
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
 
-    if (char === "\\") {
-      escaped = true;
-      continue;
-    }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
 
-    if (char === "\"") {
-      inString = !inString;
-      continue;
-    }
+      if (char === "\"") {
+        inString = !inString;
+        continue;
+      }
 
-    if (inString) continue;
+      if (inString) continue;
 
-    if (char === "{" || char === "[") {
-      stack.push(char);
-    }
+      if (char === "{" || char === "[") {
+        stack.push(char);
+      }
 
-    if (char === "}" || char === "]") {
-      const expected = char === "}" ? "{" : "[";
-      if (stack.pop() !== expected) return null;
+      if (char === "}" || char === "]") {
+        const expected = char === "}" ? "{" : "[";
+        if (stack.pop() !== expected) break;
 
-      if (stack.length === 0) {
-        return text.slice(start, index + 1);
+        if (stack.length === 0) {
+          const candidate = text.slice(start, index + 1);
+
+          try {
+            JSON.parse(candidate);
+            return candidate;
+          } catch {
+            break;
+          }
+        }
       }
     }
   }
@@ -74,7 +84,7 @@ const parseJSONSafely = (text) => {
 
   try {
     return JSON.parse(cleanedText);
-  } catch (error) {
+  } catch {
     const extractedJSON = extractBalancedJSON(cleanedText);
 
     if (!extractedJSON) {
@@ -96,7 +106,7 @@ const createApiError = (message, statusCode = 502) => {
 };
 
 const getOpenRouterKeys = () => {
-  const keys = [
+  const numberedKeys = [
     process.env.OPEN_ROUTER_API_KEY1,
     process.env.OPEN_ROUTER_API_KEY2,
     process.env.OPEN_ROUTER_API_KEY3,
@@ -104,11 +114,21 @@ const getOpenRouterKeys = () => {
     process.env.OPEN_ROUTER_API_KEY5,
     process.env.OPEN_ROUTER_API_KEY6,
     process.env.OPEN_ROUTER_API_KEY7,
-  ]
-    .map((key) => String(key || "").trim())
+  ];
+  const configuredKeys = String(
+    process.env.OPENROUTER_API_KEYS || process.env.OPENROUTER_API_KEY || ""
+  )
+    .split(",")
+    .map((key) => key.trim())
     .filter(Boolean);
 
-  return Array.from(new Set(keys));
+  return Array.from(
+    new Set(
+      [...numberedKeys, ...configuredKeys]
+        .map((key) => String(key || "").trim())
+        .filter(Boolean)
+    )
+  );
 };
 
 const callOpenRouter = async ({ apiKey, prompt, temperature }) => {
@@ -218,10 +238,12 @@ Your previous response may have been invalid. Return one valid JSON object only.
       );
     }
 
-    console.error("OpenRouter invalid JSON content:", lastContent.slice(0, 500));
+    console.error(
+      "OpenRouter: all configured keys failed. Last response:",
+      lastContent.slice(0, 500)
+    );
     throw createApiError(
-      lastError?.message ||
-        "OpenRouter API error: all configured keys failed",
+      "OpenRouter API error: all configured keys failed. Add another key or try again later.",
       lastError?.statusCode || 502
     );
   } catch (error) {

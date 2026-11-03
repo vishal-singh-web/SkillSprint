@@ -70,9 +70,15 @@ nextApp.prepare().then(() => {
   app.use((err, req, res, next) => {
     console.error("Server error:", err.message);
 
-    res.status(err.statusCode || 500).json({
+    const statusCode = Number.isInteger(err.statusCode)
+      ? err.statusCode
+      : Number.isInteger(err.status)
+        ? err.status
+        : 500;
+
+    res.status(statusCode).json({
       success: false,
-      message: err.statusCode ? err.message : "API error",
+      message: err.message || "API error",
     });
   });
 
