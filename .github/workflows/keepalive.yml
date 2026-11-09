@@ -12,18 +12,30 @@ jobs:
       - name: Ping Render health endpoint
         env:
           RENDER_HEALTH_URL: ${{ secrets.RENDER_HEALTH_URL }}
-        run: curl --fail --silent --show-error --max-time 30 "$RENDER_HEALTH_URL"
+        run: |
+          test -n "$RENDER_HEALTH_URL" || {
+            echo "Missing GitHub Actions secret: RENDER_HEALTH_URL"
+            exit 1
+          }
+          curl --fail --silent --show-error --max-time 30 "$RENDER_HEALTH_URL"
 
       - name: Ping Supabase Auth
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-        run: curl --fail --silent --show-error --max-time 30 "$SUPABASE_URL/auth/v1/health"
+        run: |
+          test -n "$SUPABASE_URL" || {
+            echo "Missing GitHub Actions secret: SUPABASE_URL"
+            exit 1
+          }
+          curl --fail --silent --show-error --max-time 30 "$SUPABASE_URL/auth/v1/health"
 
       - name: Touch Supabase database
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: >-
+          test -n "$SUPABASE_URL" &&
+          test -n "$SUPABASE_ANON_KEY" &&
           curl --fail --silent --show-error --max-time 30
           -H "apikey: $SUPABASE_ANON_KEY"
           "$SUPABASE_URL/rest/v1/profiles?select=id&limit=1"
